@@ -1,9 +1,10 @@
-import os
+import asyncio
 import json
-import time
+import os
 import random
 import requests
-from datetime import datetime
+import time
+from playwright.async_api import async_playwright
 
 OPENAI_KEY = os.environ["OPENAI_KEY"]
 SHEET_URL  = os.environ["SHEET_URL"]
@@ -29,89 +30,6 @@ def load_seen():
 def save_seen(seen):
     with open(SEEN_FILE, "w") as f:
         json.dump(list(seen), f)
-
-def get_headers():
-    return {
-        "authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA",
-        "x-csrf-token": CT0,
-        "x-twitter-active-user": "yes",
-        "x-twitter-auth-type": "OAuth2Session",
-        "x-twitter-client-language": "en",
-        "content-type": "application/json",
-        "accept": "*/*",
-        "referer": "https://x.com/search?q=ai+automation&src=typed_query",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
-        "cookie": f"auth_token={AUTH_TOKEN}; ct0={CT0}; twid={TWID}; att=1-0HqJQxf6iUduFTT3EfozvZN1PQZ5V3loHdtlYBCl;"
-    }
-
-def search_posts(query):
-    try:
-        params = {
-            "variables": json.dumps({
-                "rawQuery": query,
-                "count": 10,
-                "querySource": "typed_query",
-                "product": "Latest",
-                "withGrokTranslatedBio": False
-            }),
-            "features": json.dumps({
-                "rweb_video_screen_enabled": False,
-                "responsive_web_graphql_timeline_navigation_enabled": True,
-                "view_counts_everywhere_api_enabled": True,
-                "longform_notetweets_consumption_enabled": True,
-                "responsive_web_enhance_cards_enabled": False
-            })
-        }
-        r = requests.get(
-            "https://x.com/i/api/graphql/qUm8YPFHJWjQ56E_dP4MDg/SearchTimeline",
-            headers=get_headers(),
-            params=params,
-            timeout=15
-        )
-        print(f"Search '{query}': {r.status_code}")
-        if r.status_code != 200:
-            return []
-
-        data = r.json()
-        posts = []
-        instructions = (
-            data.get("data", {})
-            .get("search_by_raw_query", {})
-            .get("search_timeline", {})
-            .get("timeline", {})
-            .get("instructions", [])
-        )
-        for instruction in instructions:
-            if instruction.get("type") == "TimelineAddEntries":
-                for entry in instruction.get("entries", []):
-                    try:
-                        result = entry["content"]["itemContent"]["tweet_results"]["result"]
-                        tweet = result.get("tweet", result)
-                        legacy = tweet["legacy"]
-                        user = tweet["core"]["user_results"]["result"]["legacy"]
-
-                        # External link
-                        urls = legacy.get("entities", {}).get("urls", [])
-                        website_url = urls[0].get("expanded_url", "") if urls else ""
-                        if "x.com" in website_url or "twitter.com" in website_url:
-                            website_url = ""
-
-                        posts.append({
-                            "post_url": f"https://x.com/{user['screen_name']}/status/{legacy['id_str']}",
-                            "post_title": legacy["full_text"][:80],
-                            "post_text": legacy["full_text"],
-                            "username": user["screen_name"],
-                            "profile_url": f"https://x.com/{user['screen_name']}",
-                            "post_datetime": legacy.get("created_at", ""),
-                            "location": user.get("location", ""),
-                            "website_url": website_url
-                        })
-                    except (KeyError, TypeError):
-                        continue
-        return posts
-    except Exception as e:
-        print(f"Search error: {e}")
-        return []
 
 def is_relevant(post_text, query):
     try:
@@ -165,34 +83,103 @@ def save_to_sheet(post):
     except Exception as e:
         print(f"Sheet error: {e}")
 
-# ============================================================
-# MAIN
-# ============================================================
-seen = load_seen()
-print(f"Seen posts: {len(seen)}")
+async def search_and_save():
+    seen = load_seen()
+    print(f"Seen posts: {len(seen)}")
 
-for query in QUERIES:
-    time.sleep(random.uniform(3, 6))
-    print(f"\nSearching: {query}")
-    posts = search_posts(query)
-    print(f"Found: {len(posts)} posts")
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu'
+            ]
+        )
+        context = await browser.new_context()
+        await context.add_cookies([
+            {"name": "auth_token", "value": AUTH_TOKEN, "domain": ".x.com", "path": "/"},
+            {"name": "ct0", "value": CT0, "domain": ".x.com", "path": "/"},
+            {"name": "twid", "value": TWID, "domain": ".x.com", "path": "/"},
+        ])
+        page = await context.new_page()
+        page.set_default_timeout(30000)
 
-    for post in posts:
-        url = post["post_url"]
+        for query in QUERIES:
+            print(f"\nSearching: {query}")
+            try:
+                q = query.replace(" ", "+")
+                await page.goto(
+                    f"https://x.com/search?q={q}&f=live",
+                    timeout=30000
+                )
+                await page.wait_for_timeout(8000)
+                await page.evaluate("window.scrollBy(0, 500)")
+                await page.wait_for_timeout(3000)
 
-        if url in seen:
-            print(f"Skip — already seen")
-            continue
+                tweets = await page.query_selector_all('article[data-testid="tweet"]')
+                print(f"Found: {len(tweets)} tweets")
 
-        if not is_relevant(post["post_text"], query):
-            print(f"Not relevant — skip")
-            seen.add(url)
-            continue
+                for tweet in tweets:
+                    try:
+                        link_el = await tweet.query_selector('a[href*="/status/"]')
+                        link = await link_el.get_attribute("href") if link_el else ""
+                        post_url = f"https://x.com{link}" if link else ""
 
-        save_to_sheet(post)
-        seen.add(url)
-        print(f"Saved: @{post['username']}")
-        time.sleep(random.uniform(1, 3))
+                        if not post_url or post_url in seen:
+                            continue
 
-save_seen(seen)
-print("\nDone!")
+                        text_el = await tweet.query_selector('[data-testid="tweetText"]')
+                        text = await text_el.inner_text() if text_el else ""
+
+                        user_el = await tweet.query_selector('[data-testid="User-Name"]')
+                        user_text = await user_el.inner_text() if user_el else ""
+                        username = user_text.split("\n")[1] if "\n" in user_text else user_text
+                        profile_url = f"https://x.com/{username.replace('@', '')}"
+
+                        time_el = await tweet.query_selector("time")
+                        post_datetime = await time_el.get_attribute("datetime") if time_el else ""
+
+                        ext_el = await tweet.query_selector('a[href*="http"]:not([href*="x.com"]):not([href*="twitter.com"])')
+                        website_url = await ext_el.get_attribute("href") if ext_el else ""
+
+                        user_loc_el = await tweet.query_selector('[data-testid="UserLocation"]')
+                        location = await user_loc_el.inner_text() if user_loc_el else ""
+
+                        if not text:
+                            continue
+
+                        if not is_relevant(text, query):
+                            seen.add(post_url)
+                            continue
+
+                        save_to_sheet({
+                            "post_title": text[:80],
+                            "post_text": text,
+                            "location": location,
+                            "post_datetime": post_datetime,
+                            "profile_url": profile_url,
+                            "website_url": website_url
+                        })
+
+                        seen.add(post_url)
+                        print(f"Saved: @{username}")
+                        time.sleep(random.uniform(1, 3))
+
+                    except Exception as e:
+                        print(f"Tweet parse error: {e}")
+                        continue
+
+            except Exception as e:
+                print(f"Query error: {e}")
+                continue
+
+            time.sleep(random.uniform(3, 6))
+
+        await browser.close()
+
+    save_seen(seen)
+    print("\nDone!")
+
+asyncio.run(search_and_save())
