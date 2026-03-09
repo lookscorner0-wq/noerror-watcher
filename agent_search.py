@@ -32,14 +32,16 @@ def save_seen(seen):
 
 def get_headers():
     return {
+        "authorization": "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA",
         "x-csrf-token": CT0,
         "x-twitter-active-user": "yes",
         "x-twitter-auth-type": "OAuth2Session",
         "x-twitter-client-language": "en",
         "content-type": "application/json",
         "accept": "*/*",
+        "referer": "https://x.com/search?q=ai+automation&src=typed_query",
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
-        "cookie": f"auth_token={AUTH_TOKEN}; ct0={CT0}; twid={TWID};"
+        "cookie": f"auth_token={AUTH_TOKEN}; ct0={CT0}; twid={TWID}; att=1-0HqJQxf6iUduFTT3EfozvZN1PQZ5V3loHdtlYBCl;"
     }
 
 def search_posts(query):
