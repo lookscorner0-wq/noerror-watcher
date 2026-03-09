@@ -32,7 +32,6 @@ def save_seen(seen):
 
 def get_headers():
     return {
-        "authorization": f"Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA",
         "x-csrf-token": CT0,
         "x-twitter-active-user": "yes",
         "x-twitter-auth-type": "OAuth2Session",
