@@ -26,7 +26,7 @@ jobs:
           playwright install chromium
           playwright install-deps chromium
 
-      - name: Run agent
+      - name: Run Search Agent
         env:
           OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
           SHEET_URL: ${{ secrets.SHEET_URL }}
