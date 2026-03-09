@@ -1,0 +1,40 @@
+name: Search Posts
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - run: pip install requests
+
+      - name: Run agent
+        env:
+          OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
+          SHEET_URL: ${{ secrets.SHEET_URL }}
+          TWITTER_AUTH_TOKEN: ${{ secrets.TWITTER_AUTH_TOKEN }}
+          TWITTER_CT0: ${{ secrets.TWITTER_CT0 }}
+          TWITTER_TWID: ${{ secrets.TWITTER_TWID }}
+        run: python agent_search.py
+
+      - name: Save seen posts
+        run: |
+          git config user.name "bot"
+          git config user.email "bot@bot.com"
+          git add seen_posts.json || true
+          git diff --staged --quiet || git commit -m "update seen posts"
+          git push
