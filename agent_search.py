@@ -92,7 +92,7 @@ def save_seen(seen: set):
         json.dump(list(seen), f)
 
 def is_relevant(post_text: str, bio: str) -> dict:
-     prompt = f"""You are a strict but fair lead qualifier for a digital agency.
+    prompt = f"""You are a strict but fair lead qualifier for a digital agency.
 
 COMPANY CONTEXT:
 {COMPANY_MEMORY}
@@ -118,14 +118,14 @@ SAY relevant: yes IF ANY OF THESE:
 - Founder or business owner who needs a service built or automated
 - Person has a business problem and wants someone to solve it
 - Job post hiring for automation, AI, chatbot, social media, or lead gen role
-- Bio is neutral and tweet has clear buying intent — give benefit of doubt
+- Bio is neutral and tweet has clear buying intent
 - Score is 7 or above
 
 SAY relevant: no IF ANY OF THESE:
-- Bio contains: "I build chatbots", "I offer services", "freelancer for hire", "automation agency", "I help businesses", "I provide"
-- Founder alone is NOT a reason to reject — founders are often our best clients
+- Bio contains: I build chatbots, I offer services, freelancer for hire, automation agency, I help businesses, I provide
+- Founder alone is NOT a reason to reject, founders are often our best clients
 - Building their own product is NOT a reason to reject unless they are selling dev services
-- Tweet contains: "DM to get started", "I offer", "I help", "I build", "my services", "I create", "I automate"
+- Tweet contains: DM to get started, I offer, I help, I build, my services, I create, I automate
 - Person is sharing their own project, portfolio, or case study
 - Person is looking for a full time job
 - Pure opinion, tips, or news discussion about AI
@@ -133,7 +133,7 @@ SAY relevant: no IF ANY OF THESE:
 - Big tech company hiring (Google, Microsoft, Meta, Binance)
 - Any doubt about buying intent = say no"""
 
-  try:
+    try:
         res = requests.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {OPENAI_KEY}"},
