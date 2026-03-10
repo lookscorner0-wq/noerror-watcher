@@ -94,7 +94,10 @@ Reply ONLY in this exact format — plain text, no JSON, no formatting:
 relevant: yes
 score: 8
 reason: One short sentence explaining why
-
+- STRICT: If person is SELLING or OFFERING services = NOT A CLIENT, score 1
+- STRICT: If post contains "DM to get started", "I offer", "I help businesses", "I build" = competitor, skip
+- STRICT: Only say yes if they are ASKING FOR HELP, not providing it
+- Never say yes to competitors, job seekers, or opinion posts"""
 OR
 
 relevant: no
