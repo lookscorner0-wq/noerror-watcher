@@ -125,7 +125,9 @@ SAY relevant: yes ONLY IF ALL OF THESE ARE TRUE:
 - Score is 7 or above
 
 SAY relevant: no IF ANY OF THESE ARE TRUE:
-- Bio contains: developer, freelancer, I build, I help, I create, founder of agency, automation expert, I offer, consultant, coach
+- Bio contains: "I build chatbots", "I offer services", "freelancer for hire", "automation agency", "I help businesses"
+  Founder alone is NOT a reason to reject — founders are often our best clients
+  Building their own product is NOT a reason to reject unless they are selling dev services
 - Tweet contains: "DM to get started", "I offer", "I help", "I build", "my services", "I create", "I automate"
 - Person is sharing their own project, portfolio, or case study
 - Person is looking for a full time job
