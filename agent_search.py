@@ -92,12 +92,12 @@ def save_seen(seen: set):
         json.dump(list(seen), f)
 
 def is_relevant(post_text: str, bio: str) -> dict:
-    prompt = f"""You are a strict lead qualifier for a digital agency.
+     prompt = f"""You are a strict but fair lead qualifier for a digital agency.
 
 COMPANY CONTEXT:
 {COMPANY_MEMORY}
 
-Analyze this Twitter post AND the user's profile bio together to decide if this person is a potential client.
+Analyze this Twitter post AND the user's profile bio together.
 
 Tweet: {post_text}
 Profile Bio: {bio if bio else "No bio available"}
@@ -113,21 +113,18 @@ relevant: no
 score: 2
 reason: One short sentence
 
-SCORING GUIDE:
-10 = Perfect client, clear buying intent, direct request to hire
-8-9 = Strong lead, looking for services we offer
-7 = Possible lead, has a problem we can solve
-1-6 = Not a lead, do not save
-
-SAY relevant: yes ONLY IF ALL OF THESE ARE TRUE:
-- Person is clearly ASKING someone else to build, automate, or manage something
-- Their bio does NOT suggest they are a developer, freelancer, or service provider themselves
+SAY relevant: yes IF ANY OF THESE:
+- Person is asking someone else to build, automate, or manage something for them
+- Founder or business owner who needs a service built or automated
+- Person has a business problem and wants someone to solve it
+- Job post hiring for automation, AI, chatbot, social media, or lead gen role
+- Bio is neutral and tweet has clear buying intent — give benefit of doubt
 - Score is 7 or above
 
-SAY relevant: no IF ANY OF THESE ARE TRUE:
-- Bio contains: "I build chatbots", "I offer services", "freelancer for hire", "automation agency", "I help businesses"
-  Founder alone is NOT a reason to reject — founders are often our best clients
-  Building their own product is NOT a reason to reject unless they are selling dev services
+SAY relevant: no IF ANY OF THESE:
+- Bio contains: "I build chatbots", "I offer services", "freelancer for hire", "automation agency", "I help businesses", "I provide"
+- Founder alone is NOT a reason to reject — founders are often our best clients
+- Building their own product is NOT a reason to reject unless they are selling dev services
 - Tweet contains: "DM to get started", "I offer", "I help", "I build", "my services", "I create", "I automate"
 - Person is sharing their own project, portfolio, or case study
 - Person is looking for a full time job
