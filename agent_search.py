@@ -14,20 +14,21 @@ CT0        = os.environ["TWITTER_CT0"]
 TWID       = os.environ["TWITTER_TWID"]
 SEEN_FILE  = "seen_posts.json"
 
-SYSTEM_PROMPT = """You are a senior sales expert with 10 years of experience qualifying leads for a digital agency. You have a sharp eye for spotting genuine buyers versus competitors and self-promoters.
-
-COMPANY: Digital Agency | OWNER: Mujeeb | SALES MANAGER: Bilal | WHATSAPP: +923147191066
-
-SERVICES: AI Automation (N8N, Make.com), Lead Generation, AI Chatbots (WhatsApp, Email, Caller), Social Media Marketing, Custom AI Agents, WhatsApp & Email Automation
-
-SEARCH CONTEXT:
-These tweets come from searches like: need chatbot developer, hire ai automation expert, whatsapp bot needed, need n8n developer, looking for chatbot developer, hiring lead generation expert, need ai agent developer, want to automate my business.
-
-So most tweets will already be somewhat relevant — your job is to filter out competitors and non-buyers only.""" IDEAL CLIENT: Business owners, startups, companies wanting to automate work or hire automation/AI experts
-
-BUYING SIGNALS: "looking for", "need", "seeking", "want to hire", "required", "anyone know", "hiring"
-
-NOT A CLIENT: Competitors selling own services, big tech job listings, crypto/trading bots, job seekers, opinion posts, project showcases"""
+SYSTEM_PROMPT = (
+    "You are a senior sales expert with 10 years of experience qualifying leads for a digital agency. "
+    "You have a sharp eye for spotting genuine buyers versus competitors and self-promoters.\n\n"
+    "COMPANY: Digital Agency | OWNER: Mujeeb | SALES MANAGER: Bilal | WHATSAPP: +923147191066\n\n"
+    "SERVICES: AI Automation (N8N, Make.com), Lead Generation, AI Chatbots (WhatsApp, Email, Caller), "
+    "Social Media Marketing, Custom AI Agents, WhatsApp and Email Automation\n\n"
+    "IDEAL CLIENT: Business owners, startups, companies wanting to automate work or hire automation/AI experts\n\n"
+    "BUYING SIGNALS: looking for, need, seeking, want to hire, required, anyone know, hiring\n\n"
+    "NOT A CLIENT: Competitors selling own services, big tech job listings, crypto/trading bots, "
+    "job seekers, opinion posts, project showcases\n\n"
+    "SEARCH CONTEXT: These tweets come from searches like: need chatbot developer, hire ai automation expert, "
+    "whatsapp bot needed, need n8n developer, looking for chatbot developer, hiring lead generation expert, "
+    "need ai agent developer, want to automate my business. "
+    "Most tweets will already be somewhat relevant - your job is to filter out competitors and non-buyers only."
+)
 
 SKIP_KEYWORDS = [
     "crypto", "trading", "blockchain", "forex", "nft",
@@ -36,6 +37,7 @@ SKIP_KEYWORDS = [
     "this is what my bot does", "this is what the bot does",
     "here is how i", "follow me", "check out my",
     "i am selling", "buy my", "my tool", "my product"
+]
 
 SEARCH_QUERIES = [
     "need chatbot developer",
@@ -71,41 +73,34 @@ def quick_filter(text: str) -> bool:
     return True
 
 def is_relevant(post_text: str) -> dict:
-    user_prompt = f"""Analyze this tweet and decide if this person is a potential paying client.
-
-Tweet: {post_text}
-
-THINK STEP BY STEP:
-Step 1: Is this person ASKING for help or OFFERING a service?
-Step 2: Does this tweet show a real business problem?
-Step 3: Are they willing to pay someone else to solve it?
-
-POSITIVE EXAMPLES:
-Tweet: Looking for someone to build a WhatsApp chatbot for my restaurant.
-relevant: yes | need: WhatsApp Automation
-
-Tweet: Urgent hiring - need n8n expert for our e-commerce store.
-relevant: yes | need: N8N Workflow
-
-NEGATIVE EXAMPLES:
-Tweet: I build WhatsApp chatbots for businesses. DM to get started.
-relevant: no | need: none
-
-Tweet: This is what my bot does - customers can order on WhatsApp.
-relevant: no | need: none
-
-Reply in this exact format only:
-relevant: yes
-need: WhatsApp Automation
-reason: One short sentence
-
-OR
-
-relevant: no
-need: none
-reason: One short sentence
-
-NEED must be one of: WhatsApp Automation, Email Automation, AI Chatbot, Lead Generation, Social Media Marketing, N8N Workflow, Make.com Workflow, Custom AI Agent, Complex Automation, General Automation"""
+    user_prompt = (
+        "Analyze this tweet and decide if this person is a potential paying client.\n\n"
+        "Tweet: " + post_text + "\n\n"
+        "THINK STEP BY STEP:\n"
+        "Step 1: Is this person ASKING for help or OFFERING a service?\n"
+        "Step 2: Does this tweet show a real business problem?\n"
+        "Step 3: Are they willing to pay someone else to solve it?\n\n"
+        "POSITIVE EXAMPLES:\n"
+        "Tweet: Looking for someone to build a WhatsApp chatbot for my restaurant.\n"
+        "relevant: yes | need: WhatsApp Automation\n\n"
+        "Tweet: Urgent hiring - need n8n expert for our e-commerce store.\n"
+        "relevant: yes | need: N8N Workflow\n\n"
+        "NEGATIVE EXAMPLES:\n"
+        "Tweet: I build WhatsApp chatbots for businesses. DM to get started.\n"
+        "relevant: no | need: none\n\n"
+        "Tweet: This is what my bot does - customers can order on WhatsApp.\n"
+        "relevant: no | need: none\n\n"
+        "Reply in this exact format only:\n"
+        "relevant: yes\n"
+        "need: WhatsApp Automation\n"
+        "reason: One short sentence\n\n"
+        "OR\n\n"
+        "relevant: no\n"
+        "need: none\n"
+        "reason: One short sentence\n\n"
+        "NEED must be one of: WhatsApp Automation, Email Automation, AI Chatbot, Lead Generation, "
+        "Social Media Marketing, N8N Workflow, Make.com Workflow, Custom AI Agent, Complex Automation, General Automation"
+    )
 
     try:
         res = requests.post(
@@ -226,7 +221,7 @@ async def search_and_save():
                         if post_datetime:
                             tweet_time = datetime.fromisoformat(post_datetime.replace("Z", "+00:00"))
                             diff = datetime.now(timezone.utc) - tweet_time
-                            if diff.total_seconds() > 86400:
+                            if diff.total_seconds() > 259200:
                                 print(f"Too old - skip")
                                 seen[post_url] = time.time()
                                 continue
