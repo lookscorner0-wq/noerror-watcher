@@ -92,16 +92,80 @@ def save_seen(seen: set):
         json.dump(list(seen), f)
 
 def is_relevant(post_text: str) -> dict:
-    prompt = f"""You are a lead qualifier for a digital agency.
+    prompt = f"""ROLE:
+You are a senior sales expert with 10 years of experience qualifying leads for a digital agency. You have a sharp eye for spotting genuine buyers versus competitors, time-wasters, and self-promoters. Your job is to protect the agency's time by only flagging real potential clients.
 
-COMPANY CONTEXT:
-{COMPANY_MEMORY}
+CONTEXT:
+You work for a digital agency that sells AI chatbots, automation workflows, WhatsApp bots, lead generation systems, and social media marketing. You are scanning Twitter to find businesses or individuals who genuinely NEED to hire someone for these services. Your biggest challenge is filtering out the many competitors and self-promoters who post similar content but are selling their own services.
 
-Analyze this Twitter post and decide if this person is a potential client.
+TASK:
+Analyze the tweet below and decide if this person is a potential paying client for our agency.
 
 Tweet: {post_text}
 
-Reply in this exact format only:
+THINK STEP BY STEP BEFORE DECIDING:
+Step 1: Is this person ASKING for help or OFFERING a service?
+Step 2: Does this tweet show a real business problem that needs solving?
+Step 3: Are they willing to pay someone else to solve it?
+Then give your final answer.
+
+CONSTRAINTS:
+- relevant: yes ONLY if person is clearly ASKING for help, not offering it
+- If any doubt exists, say relevant: no
+- "DM me", "I build", "I offer", "I help businesses", "This is what my bot does" = always no
+- "Looking for", "Need help", "Anyone know", "Hiring", "Want to automate" = strong yes signals
+- Showcasing their own product or project = always no
+- Educational content, tips, threads, opinions = always no
+- Crypto, trading, finance bots = always no
+- Full time job seekers = always no
+
+POSITIVE EXAMPLES:
+Tweet: Looking for someone to build a WhatsApp chatbot for my restaurant. DM me.
+relevant: yes
+need: WhatsApp Automation
+reason: Business owner needs WhatsApp chatbot built by someone else
+
+Tweet: Urgent hiring - need n8n automation expert for our e-commerce store
+relevant: yes
+need: N8N Workflow
+reason: Hiring for specific automation tool we offer
+
+Tweet: Anyone know a good agency for AI chatbot integration? Budget ready.
+relevant: yes
+need: AI Chatbot
+reason: Asking for recommendation with budget ready to spend
+
+Tweet: We are wasting 3 hours daily on manual emails. Need automation help ASAP.
+relevant: yes
+need: Email Automation
+reason: Clear pain point, ready to hire someone to fix it
+
+NEGATIVE EXAMPLES:
+Tweet: I build WhatsApp chatbots for businesses. DM to get started.
+relevant: no
+reason: Selling their own service, direct competitor
+
+Tweet: This is what my bot does — customers can order on WhatsApp automatically.
+relevant: no
+reason: Showcasing their own product, not seeking to hire
+
+Tweet: Your WhatsApp can reply automatically. DM me to build yours.
+relevant: no
+reason: Competitor offering their own service to others
+
+Tweet: We are building an order agent for ERP integration.
+relevant: no
+reason: Building their own product internally, not looking to hire
+
+Tweet: n8n is amazing for automation workflows. Here is how I use it...
+relevant: no
+reason: Sharing tips and educational content, no buying intent
+
+Tweet: ChatGPT vs Claude — which is better for coding?
+relevant: no
+reason: Opinion post with no personal business need
+
+OUTPUT FORMAT — reply in this exact format only, nothing else:
 relevant: yes
 need: WhatsApp Automation
 reason: One short sentence
@@ -122,64 +186,7 @@ NEED must be one of these only:
 - Make.com Workflow
 - Custom AI Agent
 - Complex Automation
-- General Automation
-
-EXAMPLE LEADS (relevant: yes):
-
-Tweet: Looking for someone to build a WhatsApp chatbot for my restaurant. DM me.
-relevant: yes
-need: WhatsApp Automation
-reason: Business owner needs WhatsApp chatbot built
-
-Tweet: Urgent hiring - need n8n automation expert for our e-commerce store
-relevant: yes
-need: N8N Workflow
-reason: Hiring for specific automation tool we offer
-
-Tweet: Anyone know a good agency for AI chatbot integration? Budget ready.
-relevant: yes
-need: AI Chatbot
-reason: Asking for recommendation with budget ready
-
-Tweet: We are wasting 3 hours daily on manual emails. Need automation help ASAP.
-relevant: yes
-need: Email Automation
-reason: Clear pain point, wants solution urgently
-
-EXAMPLE NON-LEADS (relevant: no):
-
-Tweet: I build WhatsApp chatbots for businesses. DM to get started.
-relevant: no
-need: none
-reason: Selling their own service, competitor
-
-Tweet: n8n is amazing for automation workflows. Here is how I use it...
-relevant: no
-need: none
-reason: Sharing tips, no buying intent
-
-Tweet: ChatGPT vs Claude - which is better for coding?
-relevant: no
-need: none
-reason: Opinion post, no personal need
-
-SAY relevant: yes IF ANY OF THESE:
-- Person is asking someone else to build, automate, or manage something for them
-- Business owner or founder who needs a service built or automated
-- Clear job post hiring for automation, AI, chatbot, social media, or lead gen role
-- Person frustrated with manual work and wants to automate
-- Person asking for recommendations for a developer or agency
-
-SAY relevant: no IF ANY OF THESE:
-- Person is selling or offering their own services
-- Tweet contains: DM to get started, I offer, I help businesses, I build, my services, I create, I automate, my agency
-- Person sharing their own project, portfolio, or case study
-- Person looking for a full time job or internship
-- General opinion or discussion about AI with no personal need
-- Crypto, trading, or finance automation
-- Big tech company hiring (Google, Microsoft, Meta, Binance)
-- Complaining about someone else product with no buying intent
-- Sharing tips, threads, or educational content"""
+- General Automation"""
 
     try:
         res = requests.post(
@@ -187,7 +194,7 @@ SAY relevant: no IF ANY OF THESE:
             headers={"Authorization": f"Bearer {OPENAI_KEY}"},
             json={
                 "model": "gpt-4o-mini",
-                "max_tokens": 80,
+                "max_tokens": 100,
                 "temperature": 0.3,
                 "messages": [{"role": "user", "content": prompt}]
             },
@@ -297,7 +304,7 @@ async def search_and_save():
                         if post_datetime:
                             tweet_time = datetime.fromisoformat(post_datetime.replace("Z", "+00:00"))
                             diff = datetime.now(timezone.utc) - tweet_time
-                            if diff.total_seconds() > 604800:
+                            if diff.total_seconds() > 86400:
                                 print(f"Too old - skip")
                                 seen.add(post_url)
                                 continue
