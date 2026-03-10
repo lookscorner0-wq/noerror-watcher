@@ -91,15 +91,16 @@ def save_seen(seen: set):
     with open(SEEN_FILE, "w") as f:
         json.dump(list(seen), f)
 
-def is_relevant(post_text: str) -> dict:
-    prompt = f"""You are a lead qualifier for a digital agency.
+def is_relevant(post_text: str, bio: str) -> dict:
+    prompt = f"""You are a strict lead qualifier for a digital agency.
 
 COMPANY CONTEXT:
 {COMPANY_MEMORY}
 
-Analyze this Twitter post and decide if this person could be a potential client.
+Analyze this Twitter post AND the user's profile bio together to decide if this person is a potential client.
 
-Post: {post_text}
+Tweet: {post_text}
+Profile Bio: {bio if bio else "No bio available"}
 
 Reply in this exact format only:
 relevant: yes
@@ -115,26 +116,23 @@ reason: One short sentence
 SCORING GUIDE:
 10 = Perfect client, clear buying intent, direct request to hire
 8-9 = Strong lead, looking for services we offer
-6-7 = Possible lead, has a problem we can solve, give benefit of doubt
-4-5 = Weak lead, vague intent
-1-3 = Not a lead
+7 = Possible lead, has a problem we can solve
+1-6 = Not a lead, do not save
 
-SAY relevant: yes IF ANY OF THESE:
-- Person says need, looking for, want to hire, seeking, required, anyone know, recommend
-- They are asking someone else to build, automate, or manage something for them
-- They have a clear business problem and seem open to solutions
-- Job post hiring for automation, AI, chatbot, social media, or lead gen role (small/medium business)
-- Person discussing frustration with manual work and wanting to automate
-- Score is 6 or above
+SAY relevant: yes ONLY IF ALL OF THESE ARE TRUE:
+- Person is clearly ASKING someone else to build, automate, or manage something
+- Their bio does NOT suggest they are a developer, freelancer, or service provider themselves
+- Score is 7 or above
 
-SAY relevant: no IF ANY OF THESE:
-- Person is SELLING or OFFERING their own services (competitor)
-- Post contains "I offer", "I help", "I build", "DM to get started", "I create", "I automate", "my services", "my agency"
-- Person is complaining about someone else's product with no buying intent
-- Pure opinion or news discussion about AI with no personal need
+SAY relevant: no IF ANY OF THESE ARE TRUE:
+- Bio contains: developer, freelancer, I build, I help, I create, founder of agency, automation expert, I offer, consultant, coach
+- Tweet contains: "DM to get started", "I offer", "I help", "I build", "my services", "I create", "I automate"
+- Person is sharing their own project, portfolio, or case study
+- Person is looking for a full time job
+- Pure opinion, tips, or news discussion about AI
 - Crypto, trading, or finance bots
-- Person looking for a full time job
-- Big tech company hiring (Google, Microsoft, Meta, Binance, etc)"""
+- Big tech company hiring (Google, Microsoft, Meta, Binance)
+- Any doubt about buying intent = say no"""
 
     try:
         res = requests.post(
@@ -143,7 +141,7 @@ SAY relevant: no IF ANY OF THESE:
             json={
                 "model": "gpt-4o-mini",
                 "max_tokens": 60,
-                "temperature": 0.4,
+                "temperature": 0.3,
                 "messages": [{"role": "user", "content": prompt}]
             },
             timeout=15
@@ -159,13 +157,24 @@ SAY relevant: no IF ANY OF THESE:
                 except:
                     pass
 
-        relevant = "relevant: yes" in answer or score >= 6
+        relevant = "relevant: yes" in answer and score >= 7
 
         return {"relevant": relevant, "score": score}
 
     except Exception as e:
         print(f"LLM error: {e}")
         return {"relevant": False, "score": 0}
+
+async def get_profile_bio(page, username: str) -> str:
+    try:
+        profile_url = f"https://x.com/{username.replace('@', '')}"
+        await page.goto(profile_url, timeout=15000, wait_until="domcontentloaded")
+        await page.wait_for_timeout(3000)
+        bio_el = await page.query_selector('[data-testid="UserDescription"]')
+        bio = await bio_el.inner_text() if bio_el else ""
+        return bio.strip()
+    except Exception:
+        return ""
 
 def save_to_sheet(post: dict, score: int):
     payload = {
@@ -212,15 +221,18 @@ async def search_and_save():
             {"name": "ct0",        "value": CT0,        "domain": ".x.com", "path": "/"},
             {"name": "twid",       "value": TWID,       "domain": ".x.com", "path": "/"},
         ])
-        page = await context.new_page()
-        page.set_default_timeout(30000)
+
+        search_page = await context.new_page()
+        profile_page = await context.new_page()
+        search_page.set_default_timeout(30000)
+        profile_page.set_default_timeout(15000)
 
         for query in SEARCH_QUERIES:
             print(f"\nSearching: {query}")
             try:
                 q = query.replace(" ", "+")
                 try:
-                    await page.goto(
+                    await search_page.goto(
                         f"https://x.com/search?q={q}&f=live",
                         timeout=20000,
                         wait_until="domcontentloaded"
@@ -229,11 +241,11 @@ async def search_and_save():
                     print(f"Page load failed: {e}")
                     continue
 
-                await page.wait_for_timeout(8000)
-                await page.evaluate("window.scrollBy(0, 500)")
-                await page.wait_for_timeout(3000)
+                await search_page.wait_for_timeout(8000)
+                await search_page.evaluate("window.scrollBy(0, 500)")
+                await search_page.wait_for_timeout(3000)
 
-                tweets = await page.query_selector_all('article[data-testid="tweet"]')
+                tweets = await search_page.query_selector_all('article[data-testid="tweet"]')
                 print(f"Tweets found: {len(tweets)}")
 
                 for tweet in tweets:
@@ -283,7 +295,10 @@ async def search_and_save():
                         loc_el = await tweet.query_selector('[data-testid="UserLocation"]')
                         location = await loc_el.inner_text() if loc_el else ""
 
-                        result = is_relevant(text)
+                        bio = await get_profile_bio(profile_page, username)
+                        print(f"Bio: {bio[:80] if bio else 'No bio'}")
+
+                        result = is_relevant(text, bio)
                         seen.add(post_url)
 
                         if not result["relevant"]:
@@ -313,6 +328,8 @@ async def search_and_save():
 
             time.sleep(random.uniform(4, 8))
 
+        await search_page.close()
+        await profile_page.close()
         await browser.close()
 
     save_seen(seen)
