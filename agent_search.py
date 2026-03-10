@@ -107,7 +107,7 @@ reason: One short sentence explaining why not
 Rules:
 - relevant: yes ONLY if they are actively looking to BUY or HIRE
 - score 1-10 (10 = perfect client, 1 = completely irrelevant)
-- Be strict — only say yes if there is clear buying intent
+- Be strict - only say yes if there is clear buying intent
 - Never say yes to competitors, job seekers, or opinion posts"""
 
     try:
