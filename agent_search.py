@@ -140,3 +140,4 @@ Rules:
 def save_to_sheet(post: dict, score: int):
     payload = {
         "A": time.strftime("%Y-%m-%d %H:%M"),
+    }
