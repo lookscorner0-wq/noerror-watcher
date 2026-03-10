@@ -40,14 +40,14 @@ SKIP_KEYWORDS = [
 ]
 
 SEARCH_QUERIES = [
-    "need chatbot developer",
-    "hire ai automation expert",
-    "whatsapp bot needed",
-    "need n8n developer",
-    "looking for chatbot developer",
-    "hiring lead generation expert",
-    "need ai agent developer",
-    "want to automate my business"
+    "looking for chatbot",
+    "need automation",
+    "hire developer",
+    "whatsapp bot",
+    "automate business",
+    "need ai help",
+    "workflow automation",
+    "chatbot for my"
 ]
 
 def load_seen():
