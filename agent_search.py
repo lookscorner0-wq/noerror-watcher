@@ -91,7 +91,7 @@ NEGATIVE EXAMPLES:
 Tweet: I build WhatsApp chatbots for businesses. DM to get started.
 relevant: no | need: none
 
-Tweet: This is what my bot does — customers can order on WhatsApp.
+Tweet: This is what my bot does - customers can order on WhatsApp.
 relevant: no | need: none
 
 Reply in this exact format only:
