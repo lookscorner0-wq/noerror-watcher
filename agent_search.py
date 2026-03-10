@@ -173,11 +173,13 @@ SEARCH_QUERIES = [
 # MAIN SEARCH
 # ============================================================
 async def search_and_save():
+    print("Function started!")
     seen = load_seen()
     print(f"Seen posts: {len(seen)}")
     saved_count = 0
 
     async with async_playwright() as p:
+        print("Launching browser...")
         browser = await p.chromium.launch(
             headless=True,
             args=[
@@ -289,5 +291,5 @@ async def search_and_save():
 
     save_seen(seen)
     print(f"\nDone! Saved: {saved_count} leads")
-
+print("Starting agent...")
 asyncio.run(search_and_save())
