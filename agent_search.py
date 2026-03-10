@@ -17,7 +17,8 @@ SEEN_FILE  = "seen_posts.json"
 COMPANY_MEMORY = """
 COMPANY: Digital Agency
 OWNER: Mujeeb
-SALES MANAGER: You (Bilal)
+SALES MANAGER: Bilal
+PHONE / WHATSAPP: +923147191066
 
 SERVICES:
 - AI Automation Workflows (N8N, Make.com)
@@ -45,7 +46,7 @@ BUYING SIGNALS:
 - "whatsapp bot", "email automation", "social media help"
 - "AI integration", "custom bot", "lead generation system"
 - "deploy chatbot", "build automation", "AI assistant for my business"
-- "DMs open", "taking clients", asking for recommendations
+- Anyone hiring for automation, AI, chatbot, or social media roles
 
 NOT A CLIENT:
 - People promoting or selling their OWN services (competitors)
@@ -58,26 +59,26 @@ NOT A CLIENT:
 """
 
 SEARCH_QUERIES = [
-    "need chatbot",
+    "need chatbot developer",
     "hire ai developer",
-    "automate my business",
-    "need automation help",
-    "looking for developer",
-    "build me a bot",
-    "ai chatbot for my",
+    "looking for automation expert",
+    "need n8n developer",
+    "looking for make.com expert",
     "whatsapp bot needed",
-    "workflow help needed",
-    "n8n help",
-    "need ai automation expert",
+    "build me a chatbot",
+    "need ai agent developer",
+    "hiring automation specialist",
+    "need workflow automation help",
     "looking for social media manager",
     "content marketer needed",
     "hiring lead generation expert",
-    "need make.com developer",
+    "need ai integration help",
+    "want to automate my business",
     "looking for chatbot developer",
-    "want to hire ai agent developer",
-    "need workflow automation",
-    "hiring automation specialist",
-    "need n8n expert"
+    "need whatsapp automation",
+    "hire email automation expert",
+    "need custom ai bot",
+    "looking for ai assistant developer"
 ]
 
 def load_seen():
@@ -91,12 +92,12 @@ def save_seen(seen: set):
         json.dump(list(seen), f)
 
 def is_relevant(post_text: str) -> dict:
-    prompt = f"""You are a strict lead qualifier for a digital agency.
+    prompt = f"""You are a lead qualifier for a digital agency.
 
-COMPANY SERVICES:
+COMPANY CONTEXT:
 {COMPANY_MEMORY}
 
-Analyze this Twitter post. Answer relevant: yes ONLY if the person is clearly ASKING TO HIRE or BUY a service.
+Analyze this Twitter post and decide if this person could be a potential client.
 
 Post: {post_text}
 
@@ -111,23 +112,29 @@ relevant: no
 score: 2
 reason: One short sentence
 
-STRICT RULES - say relevant: no if any of these are true:
-- Person is SELLING or OFFERING their own services
-- Post contains "I offer", "I help", "I build", "DM to get started", "my services", "I create", "I automate"
-- Person is complaining about a product or chatbot
-- Person is sharing opinions, tips, or content about AI or automation
-- Person is asking for a job or full time employment
-- Post is a general discussion with no clear purchase intent
-- Post uses hashtags like #AIAutomation #LegalTech to promote their own content
-- Big company job listings (Google, Microsoft, Binance, etc)
-- Person is sharing their own project, portfolio, or case study
-- Post is about crypto, trading bots, or finance automation
+SCORING GUIDE:
+10 = Perfect client, clear buying intent, direct request to hire
+8-9 = Strong lead, looking for services we offer
+6-7 = Possible lead, has a problem we can solve, give benefit of doubt
+4-5 = Weak lead, vague intent
+1-3 = Not a lead
 
-ONLY say relevant: yes if:
-- Person says need, looking for, want to hire, seeking, anyone know, required, we are hiring
-- They are clearly asking someone else to build or automate something for them
-- They have a business problem and want someone to solve it
-- It is a job post hiring for automation, AI, chatbot, social media, or lead gen role"""
+SAY relevant: yes IF ANY OF THESE:
+- Person says need, looking for, want to hire, seeking, required, anyone know, recommend
+- They are asking someone else to build, automate, or manage something for them
+- They have a clear business problem and seem open to solutions
+- Job post hiring for automation, AI, chatbot, social media, or lead gen role (small/medium business)
+- Person discussing frustration with manual work and wanting to automate
+- Score is 6 or above
+
+SAY relevant: no IF ANY OF THESE:
+- Person is SELLING or OFFERING their own services (competitor)
+- Post contains "I offer", "I help", "I build", "DM to get started", "I create", "I automate", "my services", "my agency"
+- Person is complaining about someone else's product with no buying intent
+- Pure opinion or news discussion about AI with no personal need
+- Crypto, trading, or finance bots
+- Person looking for a full time job
+- Big tech company hiring (Google, Microsoft, Meta, Binance, etc)"""
 
     try:
         res = requests.post(
@@ -136,7 +143,7 @@ ONLY say relevant: yes if:
             json={
                 "model": "gpt-4o-mini",
                 "max_tokens": 60,
-                "temperature": 0.2,
+                "temperature": 0.4,
                 "messages": [{"role": "user", "content": prompt}]
             },
             timeout=15
@@ -144,7 +151,6 @@ ONLY say relevant: yes if:
         answer = res.json()["choices"][0]["message"]["content"].strip().lower()
         print(f"LLM: {answer}")
 
-        relevant = "relevant: yes" in answer
         score = 5
         for line in answer.split("\n"):
             if line.startswith("score:"):
@@ -152,6 +158,8 @@ ONLY say relevant: yes if:
                     score = int(line.replace("score:", "").strip())
                 except:
                     pass
+
+        relevant = "relevant: yes" in answer or score >= 6
 
         return {"relevant": relevant, "score": score}
 
@@ -196,7 +204,9 @@ async def search_and_save():
             ]
         )
         print("Browser launched!")
-        context = await browser.new_context()
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
         await context.add_cookies([
             {"name": "auth_token", "value": AUTH_TOKEN, "domain": ".x.com", "path": "/"},
             {"name": "ct0",        "value": CT0,        "domain": ".x.com", "path": "/"},
@@ -209,10 +219,16 @@ async def search_and_save():
             print(f"\nSearching: {query}")
             try:
                 q = query.replace(" ", "+")
-                await page.goto(
-                    f"https://x.com/search?q={q}&f=live",
-                    timeout=30000
-                )
+                try:
+                    await page.goto(
+                        f"https://x.com/search?q={q}&f=live",
+                        timeout=20000,
+                        wait_until="domcontentloaded"
+                    )
+                except Exception as e:
+                    print(f"Page load failed: {e}")
+                    continue
+
                 await page.wait_for_timeout(8000)
                 await page.evaluate("window.scrollBy(0, 500)")
                 await page.wait_for_timeout(3000)
