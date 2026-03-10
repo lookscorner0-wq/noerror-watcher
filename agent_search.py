@@ -14,49 +14,26 @@ CT0        = os.environ["TWITTER_CT0"]
 TWID       = os.environ["TWITTER_TWID"]
 SEEN_FILE  = "seen_posts.json"
 
-COMPANY_MEMORY = """
-COMPANY: Digital Agency
-OWNER: Mujeeb
-SALES MANAGER: Bilal
-PHONE / WHATSAPP: +923147191066
+SYSTEM_PROMPT = """You are a senior sales expert with 10 years of experience qualifying leads for a digital agency. You have a sharp eye for spotting genuine buyers versus competitors and self-promoters.
 
-SERVICES:
-- AI Automation Workflows (N8N, Make.com)
-- Lead Generation Systems
-- AI Chatbots (Customer Care, Booking, Email, WhatsApp, Caller Bots)
-- Social Media Marketing and Content Marketing
-- Complex Workflow Automation
-- Personalized Assistant Bots
-- Custom AI Agents
-- WhatsApp and Email Automation
+COMPANY: Digital Agency | OWNER: Mujeeb | SALES MANAGER: Bilal | WHATSAPP: +923147191066
 
-IDEAL CLIENT:
-- Business owners wanting to automate repetitive work
-- Startups needing chatbot or AI integration
-- Companies looking to hire automation or AI experts
-- Businesses needing WhatsApp, Email, or Social Media automation
-- Anyone wanting to reduce manual work using AI
-- Companies needing N8N or Make.com workflows
-- Anyone needing custom AI agent or bot development
+SERVICES: AI Automation (N8N, Make.com), Lead Generation, AI Chatbots (WhatsApp, Email, Caller), Social Media Marketing, Custom AI Agents, WhatsApp & Email Automation
 
-BUYING SIGNALS:
-- "looking for", "need", "seeking", "want to hire", "required", "anyone know"
-- "automation expert", "chatbot developer", "AI agent builder"
-- "workflow automation", "n8n developer", "make.com expert"
-- "whatsapp bot", "email automation", "social media help"
-- "AI integration", "custom bot", "lead generation system"
-- "deploy chatbot", "build automation", "AI assistant for my business"
-- Anyone hiring for automation, AI, chatbot, or social media roles
+IDEAL CLIENT: Business owners, startups, companies wanting to automate work or hire automation/AI experts
 
-NOT A CLIENT:
-- People promoting or selling their OWN services (competitors)
-- Big company job listings (Google, Microsoft, Binance, etc)
-- People discussing AI news, opinions, or trends with no buying intent
-- Crypto or trading bot requests
-- People looking for full time employment
-- Random automation discussions with no clear buying intent
-- People sharing their own projects or portfolios
-"""
+BUYING SIGNALS: "looking for", "need", "seeking", "want to hire", "required", "anyone know", "hiring"
+
+NOT A CLIENT: Competitors selling own services, big tech job listings, crypto/trading bots, job seekers, opinion posts, project showcases"""
+
+SKIP_KEYWORDS = [
+    "crypto", "trading", "blockchain", "forex", "nft",
+    "i build", "i offer", "i help businesses", "i create", "i automate",
+    "dm to get started", "my services", "my agency", "i provide",
+    "this is what my bot does", "this is what the bot does",
+    "here is how i", "follow me", "check out my",
+    "i am selling", "buy my", "my tool", "my product"
+]
 
 SEARCH_QUERIES = [
     "need chatbot developer",
@@ -84,88 +61,50 @@ SEARCH_QUERIES = [
 def load_seen():
     if os.path.exists(SEEN_FILE):
         with open(SEEN_FILE) as f:
-            return set(json.load(f))
-    return set()
+            data = json.load(f)
+        if isinstance(data, list):
+            return {}
+        cutoff = time.time() - 86400
+        return {url: ts for url, ts in data.items() if ts > cutoff}
+    return {}
 
-def save_seen(seen: set):
+def save_seen(seen: dict):
     with open(SEEN_FILE, "w") as f:
-        json.dump(list(seen), f)
+        json.dump(seen, f)
+
+def quick_filter(text: str) -> bool:
+    text_lower = text.lower()
+    for word in SKIP_KEYWORDS:
+        if word in text_lower:
+            print(f"Pre-filter blocked: {word}")
+            return False
+    return True
 
 def is_relevant(post_text: str) -> dict:
-    prompt = f"""ROLE:
-You are a senior sales expert with 10 years of experience qualifying leads for a digital agency. You have a sharp eye for spotting genuine buyers versus competitors, time-wasters, and self-promoters. Your job is to protect the agency's time by only flagging real potential clients.
-
-CONTEXT:
-You work for a digital agency that sells AI chatbots, automation workflows, WhatsApp bots, lead generation systems, and social media marketing. You are scanning Twitter to find businesses or individuals who genuinely NEED to hire someone for these services. Your biggest challenge is filtering out the many competitors and self-promoters who post similar content but are selling their own services.
-
-TASK:
-Analyze the tweet below and decide if this person is a potential paying client for our agency.
+    user_prompt = f"""Analyze this tweet and decide if this person is a potential paying client.
 
 Tweet: {post_text}
 
-THINK STEP BY STEP BEFORE DECIDING:
+THINK STEP BY STEP:
 Step 1: Is this person ASKING for help or OFFERING a service?
-Step 2: Does this tweet show a real business problem that needs solving?
+Step 2: Does this tweet show a real business problem?
 Step 3: Are they willing to pay someone else to solve it?
-Then give your final answer.
-
-CONSTRAINTS:
-- relevant: yes ONLY if person is clearly ASKING for help, not offering it
-- If any doubt exists, say relevant: no
-- "DM me", "I build", "I offer", "I help businesses", "This is what my bot does" = always no
-- "Looking for", "Need help", "Anyone know", "Hiring", "Want to automate" = strong yes signals
-- Showcasing their own product or project = always no
-- Educational content, tips, threads, opinions = always no
-- Crypto, trading, finance bots = always no
-- Full time job seekers = always no
 
 POSITIVE EXAMPLES:
-Tweet: Looking for someone to build a WhatsApp chatbot for my restaurant. DM me.
-relevant: yes
-need: WhatsApp Automation
-reason: Business owner needs WhatsApp chatbot built by someone else
+Tweet: Looking for someone to build a WhatsApp chatbot for my restaurant.
+relevant: yes | need: WhatsApp Automation
 
-Tweet: Urgent hiring - need n8n automation expert for our e-commerce store
-relevant: yes
-need: N8N Workflow
-reason: Hiring for specific automation tool we offer
-
-Tweet: Anyone know a good agency for AI chatbot integration? Budget ready.
-relevant: yes
-need: AI Chatbot
-reason: Asking for recommendation with budget ready to spend
-
-Tweet: We are wasting 3 hours daily on manual emails. Need automation help ASAP.
-relevant: yes
-need: Email Automation
-reason: Clear pain point, ready to hire someone to fix it
+Tweet: Urgent hiring - need n8n expert for our e-commerce store.
+relevant: yes | need: N8N Workflow
 
 NEGATIVE EXAMPLES:
 Tweet: I build WhatsApp chatbots for businesses. DM to get started.
-relevant: no
-reason: Selling their own service, direct competitor
+relevant: no | need: none
 
-Tweet: This is what my bot does — customers can order on WhatsApp automatically.
-relevant: no
-reason: Showcasing their own product, not seeking to hire
+Tweet: This is what my bot does — customers can order on WhatsApp.
+relevant: no | need: none
 
-Tweet: Your WhatsApp can reply automatically. DM me to build yours.
-relevant: no
-reason: Competitor offering their own service to others
-
-Tweet: We are building an order agent for ERP integration.
-relevant: no
-reason: Building their own product internally, not looking to hire
-
-Tweet: n8n is amazing for automation workflows. Here is how I use it...
-relevant: no
-reason: Sharing tips and educational content, no buying intent
-
-Tweet: ChatGPT vs Claude — which is better for coding?
-relevant: no
-reason: Opinion post with no personal business need
-
-OUTPUT FORMAT — reply in this exact format only, nothing else:
+Reply in this exact format only:
 relevant: yes
 need: WhatsApp Automation
 reason: One short sentence
@@ -176,17 +115,7 @@ relevant: no
 need: none
 reason: One short sentence
 
-NEED must be one of these only:
-- WhatsApp Automation
-- Email Automation
-- AI Chatbot
-- Lead Generation
-- Social Media Marketing
-- N8N Workflow
-- Make.com Workflow
-- Custom AI Agent
-- Complex Automation
-- General Automation"""
+NEED must be one of: WhatsApp Automation, Email Automation, AI Chatbot, Lead Generation, Social Media Marketing, N8N Workflow, Make.com Workflow, Custom AI Agent, Complex Automation, General Automation"""
 
     try:
         res = requests.post(
@@ -194,9 +123,12 @@ NEED must be one of these only:
             headers={"Authorization": f"Bearer {OPENAI_KEY}"},
             json={
                 "model": "gpt-4o-mini",
-                "max_tokens": 100,
+                "max_tokens": 80,
                 "temperature": 0.3,
-                "messages": [{"role": "user", "content": prompt}]
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt}
+                ]
             },
             timeout=15
         )
@@ -306,8 +238,12 @@ async def search_and_save():
                             diff = datetime.now(timezone.utc) - tweet_time
                             if diff.total_seconds() > 86400:
                                 print(f"Too old - skip")
-                                seen.add(post_url)
+                                seen[post_url] = time.time()
                                 continue
+
+                        if not quick_filter(text):
+                            seen[post_url] = time.time()
+                            continue
 
                         user_el = await tweet.query_selector('[data-testid="User-Name"]')
                         user_text = await user_el.inner_text() if user_el else ""
@@ -334,7 +270,7 @@ async def search_and_save():
                         location = await loc_el.inner_text() if loc_el else ""
 
                         result = is_relevant(text)
-                        seen.add(post_url)
+                        seen[post_url] = time.time()
 
                         if not result["relevant"]:
                             print(f"Not relevant - skip")
