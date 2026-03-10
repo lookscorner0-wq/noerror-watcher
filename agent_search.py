@@ -133,7 +133,7 @@ SAY relevant: no IF ANY OF THESE:
 - Big tech company hiring (Google, Microsoft, Meta, Binance)
 - Any doubt about buying intent = say no"""
 
-    try:
+  try:
         res = requests.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {OPENAI_KEY}"},
