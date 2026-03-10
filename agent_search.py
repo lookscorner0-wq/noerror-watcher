@@ -67,7 +67,17 @@ SEARCH_QUERIES = [
     "ai chatbot for my",
     "whatsapp bot needed",
     "workflow help needed",
-    "n8n help"
+    "n8n help",
+    "need ai automation expert",
+    "looking for social media manager",
+    "content marketer needed",
+    "hiring lead generation expert",
+    "need make.com developer",
+    "looking for chatbot developer",
+    "want to hire ai agent developer",
+    "need workflow automation",
+    "hiring automation specialist",
+    "need n8n expert"
 ]
 
 def load_seen():
@@ -81,34 +91,43 @@ def save_seen(seen: set):
         json.dump(list(seen), f)
 
 def is_relevant(post_text: str) -> dict:
-    prompt = f"""You are Bilal, Sales Manager of a digital agency.
+    prompt = f"""You are a strict lead qualifier for a digital agency.
 
-COMPANY CONTEXT:
+COMPANY SERVICES:
 {COMPANY_MEMORY}
 
-Analyze this Twitter post and decide if this person needs our services.
+Analyze this Twitter post. Answer relevant: yes ONLY if the person is clearly ASKING TO HIRE or BUY a service.
 
 Post: {post_text}
 
-Reply ONLY in this exact format — plain text, no JSON, no formatting:
+Reply in this exact format only:
 relevant: yes
 score: 8
-reason: One short sentence explaining why
+reason: One short sentence
 
 OR
 
 relevant: no
 score: 2
-reason: One short sentence explaining why not
+reason: One short sentence
 
-Rules:
-- relevant: yes ONLY if they are actively looking to BUY or HIRE
-- score 1-10 (10 = perfect client, 1 = completely irrelevant)
-- Be strict - only say yes if there is clear buying intent
-- Never say yes to competitors, job seekers, or opinion posts
-- STRICT: If person is SELLING or OFFERING services = NOT A CLIENT, score 1
-- STRICT: If post contains "DM to get started", "I offer", "I help businesses", "I build" = competitor, skip
-- STRICT: Only say yes if they are ASKING FOR HELP, not providing it"""
+STRICT RULES - say relevant: no if any of these are true:
+- Person is SELLING or OFFERING their own services
+- Post contains "I offer", "I help", "I build", "DM to get started", "my services", "I create", "I automate"
+- Person is complaining about a product or chatbot
+- Person is sharing opinions, tips, or content about AI or automation
+- Person is asking for a job or full time employment
+- Post is a general discussion with no clear purchase intent
+- Post uses hashtags like #AIAutomation #LegalTech to promote their own content
+- Big company job listings (Google, Microsoft, Binance, etc)
+- Person is sharing their own project, portfolio, or case study
+- Post is about crypto, trading bots, or finance automation
+
+ONLY say relevant: yes if:
+- Person says need, looking for, want to hire, seeking, anyone know, required, we are hiring
+- They are clearly asking someone else to build or automate something for them
+- They have a business problem and want someone to solve it
+- It is a job post hiring for automation, AI, chatbot, social media, or lead gen role"""
 
     try:
         res = requests.post(
@@ -170,10 +189,10 @@ async def search_and_save():
         browser = await p.chromium.launch(
             headless=True,
             args=[
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu'
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu"
             ]
         )
         print("Browser launched!")
@@ -220,7 +239,7 @@ async def search_and_save():
                             tweet_time = datetime.fromisoformat(post_datetime.replace("Z", "+00:00"))
                             diff = datetime.now(timezone.utc) - tweet_time
                             if diff.total_seconds() > 604800:
-                                print(f"Too old — skip")
+                                print(f"Too old - skip")
                                 seen.add(post_url)
                                 continue
 
@@ -229,10 +248,21 @@ async def search_and_save():
                         username = user_text.split("\n")[1] if "\n" in user_text else user_text
                         profile_url = f"https://x.com/{username.replace('@', '')}"
 
-                        ext_el = await tweet.query_selector(
-                            'a[href*="http"]:not([href*="x.com"]):not([href*="twitter.com"])'
-                        )
-                        website_url = await ext_el.get_attribute("href") if ext_el else ""
+                        website_url = ""
+                        try:
+                            all_links = await tweet.query_selector_all("a[href]")
+                            for link_tag in all_links:
+                                href = await link_tag.get_attribute("href") or ""
+                                if (
+                                    href.startswith("http")
+                                    and "x.com" not in href
+                                    and "twitter.com" not in href
+                                    and "t.co" not in href
+                                ):
+                                    website_url = href
+                                    break
+                        except Exception:
+                            website_url = ""
 
                         loc_el = await tweet.query_selector('[data-testid="UserLocation"]')
                         location = await loc_el.inner_text() if loc_el else ""
@@ -241,7 +271,7 @@ async def search_and_save():
                         seen.add(post_url)
 
                         if not result["relevant"]:
-                            print(f"Not relevant — skip")
+                            print(f"Not relevant - skip")
                             continue
 
                         save_to_sheet({
