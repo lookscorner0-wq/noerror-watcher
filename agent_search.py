@@ -180,15 +180,18 @@ async def search_and_save():
 
     async with async_playwright() as p:
         print("Launching browser...")
-        browser = await p.chromium.launch(
-            headless=True,
-            args=[
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu'
-            ]
-        )
+        browser = await asyncio.wait_for(
+    p.chromium.launch(
+        headless=True,
+        args=[
+            '--no-sandbox',
+            '--disable-setuid-sandbox', 
+            '--disable-dev-shm-usage',
+            '--disable-gpu'
+        ]
+    ),
+    timeout=60
+)
         context = await browser.new_context()
         await context.add_cookies([
             {"name": "auth_token", "value": AUTH_TOKEN, "domain": ".x.com", "path": "/"},
