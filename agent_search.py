@@ -91,47 +91,95 @@ def save_seen(seen: set):
     with open(SEEN_FILE, "w") as f:
         json.dump(list(seen), f)
 
-def is_relevant(post_text: str, bio: str) -> dict:
-    prompt = f"""You are a strict but fair lead qualifier for a digital agency.
+def is_relevant(post_text: str) -> dict:
+    prompt = f"""You are a lead qualifier for a digital agency.
 
 COMPANY CONTEXT:
 {COMPANY_MEMORY}
 
-Analyze this Twitter post AND the user's profile bio together.
+Analyze this Twitter post and decide if this person is a potential client.
 
 Tweet: {post_text}
-Profile Bio: {bio if bio else "No bio available"}
 
 Reply in this exact format only:
 relevant: yes
-score: 8
+need: WhatsApp Automation
 reason: One short sentence
 
 OR
 
 relevant: no
-score: 2
+need: none
 reason: One short sentence
+
+NEED must be one of these only:
+- WhatsApp Automation
+- Email Automation
+- AI Chatbot
+- Lead Generation
+- Social Media Marketing
+- N8N Workflow
+- Make.com Workflow
+- Custom AI Agent
+- Complex Automation
+- General Automation
+
+EXAMPLE LEADS (relevant: yes):
+
+Tweet: Looking for someone to build a WhatsApp chatbot for my restaurant. DM me.
+relevant: yes
+need: WhatsApp Automation
+reason: Business owner needs WhatsApp chatbot built
+
+Tweet: Urgent hiring - need n8n automation expert for our e-commerce store
+relevant: yes
+need: N8N Workflow
+reason: Hiring for specific automation tool we offer
+
+Tweet: Anyone know a good agency for AI chatbot integration? Budget ready.
+relevant: yes
+need: AI Chatbot
+reason: Asking for recommendation with budget ready
+
+Tweet: We are wasting 3 hours daily on manual emails. Need automation help ASAP.
+relevant: yes
+need: Email Automation
+reason: Clear pain point, wants solution urgently
+
+EXAMPLE NON-LEADS (relevant: no):
+
+Tweet: I build WhatsApp chatbots for businesses. DM to get started.
+relevant: no
+need: none
+reason: Selling their own service, competitor
+
+Tweet: n8n is amazing for automation workflows. Here is how I use it...
+relevant: no
+need: none
+reason: Sharing tips, no buying intent
+
+Tweet: ChatGPT vs Claude - which is better for coding?
+relevant: no
+need: none
+reason: Opinion post, no personal need
 
 SAY relevant: yes IF ANY OF THESE:
 - Person is asking someone else to build, automate, or manage something for them
-- Founder or business owner who needs a service built or automated
-- Person has a business problem and wants someone to solve it
-- Job post hiring for automation, AI, chatbot, social media, or lead gen role
-- Bio is neutral and tweet has clear buying intent
-- Score is 7 or above
+- Business owner or founder who needs a service built or automated
+- Clear job post hiring for automation, AI, chatbot, social media, or lead gen role
+- Person frustrated with manual work and wants to automate
+- Person asking for recommendations for a developer or agency
 
 SAY relevant: no IF ANY OF THESE:
-- Bio contains: I build chatbots, I offer services, freelancer for hire, automation agency, I help businesses, I provide
-- Founder alone is NOT a reason to reject, founders are often our best clients
-- Building their own product is NOT a reason to reject unless they are selling dev services
-- Tweet contains: DM to get started, I offer, I help, I build, my services, I create, I automate
-- Person is sharing their own project, portfolio, or case study
-- Person is looking for a full time job
-- Pure opinion, tips, or news discussion about AI
-- Crypto, trading, or finance bots
+- Person is selling or offering their own services
+- Tweet contains: DM to get started, I offer, I help businesses, I build, my services, I create, I automate, my agency
+- Person sharing their own project, portfolio, or case study
+- Person looking for a full time job or internship
+- General opinion or discussion about AI with no personal need
+- Crypto, trading, or finance automation
 - Big tech company hiring (Google, Microsoft, Meta, Binance)
-- Any doubt about buying intent = say no"""
+- Complaining about someone else product with no buying intent
+- Sharing tips, threads, or educational content"""
 
     try:
         res = requests.post(
@@ -139,7 +187,7 @@ SAY relevant: no IF ANY OF THESE:
             headers={"Authorization": f"Bearer {OPENAI_KEY}"},
             json={
                 "model": "gpt-4o-mini",
-                "max_tokens": 60,
+                "max_tokens": 80,
                 "temperature": 0.3,
                 "messages": [{"role": "user", "content": prompt}]
             },
@@ -148,40 +196,26 @@ SAY relevant: no IF ANY OF THESE:
         answer = res.json()["choices"][0]["message"]["content"].strip().lower()
         print(f"LLM: {answer}")
 
-        score = 5
+        relevant = "relevant: yes" in answer
+        client_need = "General Automation"
         for line in answer.split("\n"):
-            if line.startswith("score:"):
-                try:
-                    score = int(line.replace("score:", "").strip())
-                except:
-                    pass
+            if line.startswith("need:"):
+                client_need = line.replace("need:", "").strip().title()
+                break
 
-        relevant = "relevant: yes" in answer and score >= 7
-
-        return {"relevant": relevant, "score": score}
+        return {"relevant": relevant, "need": client_need}
 
     except Exception as e:
         print(f"LLM error: {e}")
-        return {"relevant": False, "score": 0}
+        return {"relevant": False, "need": ""}
 
-async def get_profile_bio(page, username: str) -> str:
-    try:
-        profile_url = f"https://x.com/{username.replace('@', '')}"
-        await page.goto(profile_url, timeout=15000, wait_until="domcontentloaded")
-        await page.wait_for_timeout(3000)
-        bio_el = await page.query_selector('[data-testid="UserDescription"]')
-        bio = await bio_el.inner_text() if bio_el else ""
-        return bio.strip()
-    except Exception:
-        return ""
-
-def save_to_sheet(post: dict, score: int):
+def save_to_sheet(post: dict):
     payload = {
         "A": time.strftime("%Y-%m-%d %H:%M"),
         "B": post.get("post_title", ""),
         "E": post.get("post_text", ""),
         "M": post.get("location", ""),
-        "N": score,
+        "N": post.get("client_need", ""),
         "O": "In Waiting",
         "P": "",
         "Q": post.get("post_datetime", ""),
@@ -221,17 +255,15 @@ async def search_and_save():
             {"name": "twid",       "value": TWID,       "domain": ".x.com", "path": "/"},
         ])
 
-        search_page = await context.new_page()
-        profile_page = await context.new_page()
-        search_page.set_default_timeout(30000)
-        profile_page.set_default_timeout(15000)
+        page = await context.new_page()
+        page.set_default_timeout(30000)
 
         for query in SEARCH_QUERIES:
             print(f"\nSearching: {query}")
             try:
                 q = query.replace(" ", "+")
                 try:
-                    await search_page.goto(
+                    await page.goto(
                         f"https://x.com/search?q={q}&f=live",
                         timeout=20000,
                         wait_until="domcontentloaded"
@@ -240,11 +272,11 @@ async def search_and_save():
                     print(f"Page load failed: {e}")
                     continue
 
-                await search_page.wait_for_timeout(8000)
-                await search_page.evaluate("window.scrollBy(0, 500)")
-                await search_page.wait_for_timeout(3000)
+                await page.wait_for_timeout(8000)
+                await page.evaluate("window.scrollBy(0, 500)")
+                await page.wait_for_timeout(3000)
 
-                tweets = await search_page.query_selector_all('article[data-testid="tweet"]')
+                tweets = await page.query_selector_all('article[data-testid="tweet"]')
                 print(f"Tweets found: {len(tweets)}")
 
                 for tweet in tweets:
@@ -294,10 +326,7 @@ async def search_and_save():
                         loc_el = await tweet.query_selector('[data-testid="UserLocation"]')
                         location = await loc_el.inner_text() if loc_el else ""
 
-                        bio = await get_profile_bio(profile_page, username)
-                        print(f"Bio: {bio[:80] if bio else 'No bio'}")
-
-                        result = is_relevant(text, bio)
+                        result = is_relevant(text)
                         seen.add(post_url)
 
                         if not result["relevant"]:
@@ -310,11 +339,12 @@ async def search_and_save():
                             "location":      location,
                             "post_datetime": post_datetime,
                             "profile_url":   profile_url,
-                            "website_url":   website_url
-                        }, score=result["score"])
+                            "website_url":   website_url,
+                            "client_need":   result["need"]
+                        })
 
                         saved_count += 1
-                        print(f"Saved: @{username} | Score: {result['score']}")
+                        print(f"Saved: @{username} | Need: {result['need']}")
                         time.sleep(random.uniform(1, 3))
 
                     except Exception as e:
@@ -327,8 +357,6 @@ async def search_and_save():
 
             time.sleep(random.uniform(4, 8))
 
-        await search_page.close()
-        await profile_page.close()
         await browser.close()
 
     save_seen(seen)
