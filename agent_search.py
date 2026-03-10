@@ -20,7 +20,10 @@ COMPANY: Digital Agency | OWNER: Mujeeb | SALES MANAGER: Bilal | WHATSAPP: +9231
 
 SERVICES: AI Automation (N8N, Make.com), Lead Generation, AI Chatbots (WhatsApp, Email, Caller), Social Media Marketing, Custom AI Agents, WhatsApp & Email Automation
 
-IDEAL CLIENT: Business owners, startups, companies wanting to automate work or hire automation/AI experts
+SEARCH CONTEXT:
+These tweets come from searches like: need chatbot developer, hire ai automation expert, whatsapp bot needed, need n8n developer, looking for chatbot developer, hiring lead generation expert, need ai agent developer, want to automate my business.
+
+So most tweets will already be somewhat relevant — your job is to filter out competitors and non-buyers only.""" IDEAL CLIENT: Business owners, startups, companies wanting to automate work or hire automation/AI experts
 
 BUYING SIGNALS: "looking for", "need", "seeking", "want to hire", "required", "anyone know", "hiring"
 
@@ -33,29 +36,16 @@ SKIP_KEYWORDS = [
     "this is what my bot does", "this is what the bot does",
     "here is how i", "follow me", "check out my",
     "i am selling", "buy my", "my tool", "my product"
-]
 
 SEARCH_QUERIES = [
     "need chatbot developer",
-    "hire ai developer",
-    "looking for automation expert",
-    "need n8n developer",
-    "looking for make.com expert",
+    "hire ai automation expert",
     "whatsapp bot needed",
-    "build me a chatbot",
-    "need ai agent developer",
-    "hiring automation specialist",
-    "need workflow automation help",
-    "looking for social media manager",
-    "content marketer needed",
-    "hiring lead generation expert",
-    "need ai integration help",
-    "want to automate my business",
+    "need n8n developer",
     "looking for chatbot developer",
-    "need whatsapp automation",
-    "hire email automation expert",
-    "need custom ai bot",
-    "looking for ai assistant developer"
+    "hiring lead generation expert",
+    "need ai agent developer",
+    "want to automate my business"
 ]
 
 def load_seen():
@@ -64,7 +54,7 @@ def load_seen():
             data = json.load(f)
         if isinstance(data, list):
             return {}
-        cutoff = time.time() - 86400
+        cutoff = time.time() - 259200
         return {url: ts for url, ts in data.items() if ts > cutoff}
     return {}
 
