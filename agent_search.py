@@ -157,16 +157,16 @@ def save_seen(seen: set):
 # SEARCH QUERIES — LLM generates from buying signals
 # ============================================================
 SEARCH_QUERIES = [
-    "looking for chatbot developer",
-    "need ai automation expert",
-    "seeking workflow automation help",
-    "want to hire ai agent developer",
-    "need whatsapp automation",
-    "looking for n8n developer",
-    "need social media automation",
-    "seeking make.com expert",
-    "want to build ai chatbot",
-    "need automation for my business"
+    "need chatbot",
+    "hire ai developer",
+    "automate my business",
+    "need automation help",
+    "looking for developer",
+    "build me a bot",
+    "ai chatbot for my",
+    "whatsapp bot needed",
+    "workflow help needed",
+    "n8n help"
 ]
 
 # ============================================================
