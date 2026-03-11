@@ -185,7 +185,7 @@ def get_job_data(job_id, s):
 
         return {
             "title":         title,
-            "description":   data.get("description", {}).get("text", "")[:400],
+            "description":   data.get("description", {}).get("text", "")[:300].replace("\n", " ").replace("\r", " ").strip(),
             "location":      location,
             "job_condition": job_condition,
             "job_time":      job_time,
