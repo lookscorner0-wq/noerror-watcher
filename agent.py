@@ -184,7 +184,7 @@ for query in QUERIES:
             "profile_url":   data.get("profile_url", url),
             "apply_url":     data.get("website_url", "")
         })
-        })
+    
         seen.add(url)
         print(f"Saved '{data.get('title')}'! Score: {lead_score}")
         time.sleep(random.uniform(1, 3))
