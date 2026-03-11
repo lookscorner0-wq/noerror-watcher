@@ -22,11 +22,10 @@ QUERIES = [
 SYSTEM_PROMPT = """You are a lead qualification expert for LooksCorner — a digital agency based in Pakistan.
 
 Our agency offers:
-- AI Automation & Complex Workflows
+- AI Automation & Complex Custom Workflows
 - Chatbot Development (WhatsApp, Web, Caller Bots)
 - Social Media Marketing, Auto Posting & Scheduling
 - Lead Generation & Lead Booking Bots
-- Web Designing & Web Development
 - Email & WhatsApp Automation
 - N8N / Make.com Workflow Building
 - Personalized AI Agents
@@ -36,34 +35,43 @@ Your job is to:
 2. Classify the company size as client type
 
 RELEVANT if:
-- Company needs AI, automation, chatbot, social media, web dev, lead gen services
-- Company is hiring developers — they might need our services instead
-- Any tech-related role that suggests they need digital services
+- Company needs AI, automation, chatbot, social media, lead gen services
+- Company needs workflow automation (N8N, Make.com, Zapier)
+- Any tech role suggesting they need digital/automation services
 
 NOT RELEVANT if:
-- Pure non-tech roles: Data Entry, Accountant, HR, Driver, Teacher, Cook etc.
+- Web designing or web development roles
+- Pure non-tech roles: Data Entry, Accountant, HR, Driver, Teacher etc.
 
 CLIENT TYPE:
-- "Main Client" → small business, startup, freelancer, solopreneur, individual
+- "Main Client" → small business, startup, freelancer, individual
 - "GoodClient" → mid level company, growing business
 - "Oppertunity" → big corporation, enterprise, large company
 
 Examples:
-Job: "AI Automation Specialist" at small startup
+Job: "AI Automation Specialist needed"
 relevant: yes
 client_type: Main Client
 
-Job: "WhatsApp chatbot developer" at e-commerce store
+Job: "WhatsApp chatbot developer for e-commerce"
 relevant: yes
 client_type: Main Client
 
-Job: "React Developer" at mid-size SaaS company
+Job: "N8N workflow builder for SaaS"
 relevant: yes
 client_type: GoodClient
 
-Job: "Senior ML Engineer" at Google
+Job: "Social Media Manager at growing startup"
+relevant: yes
+client_type: GoodClient
+
+Job: "Senior ML Engineer at Google"
 relevant: yes
 client_type: Oppertunity
+
+Job: "React Developer / Web Designer"
+relevant: no
+client_type: none
 
 Job: "Data Entry Operator"
 relevant: no
@@ -185,7 +193,7 @@ def get_job_data(job_id, s):
 
         return {
             "title":         title,
-            "description":   data.get("description", {}).get("text", "")[:300].replace("\n", " ").replace("\r", " ").strip(),
+            "description": " ".join(data.get("description", {}).get("text", "")[:400].split()),
             "location":      location,
             "job_condition": job_condition,
             "job_time":      job_time,
