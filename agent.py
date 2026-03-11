@@ -4,7 +4,7 @@ import time
 import random
 import re
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 
 LI_AT         = os.environ["LI_AT"]
 LI_JSESSIONID = os.environ["LI_JSESSIONID"]
@@ -19,9 +19,9 @@ QUERIES = [
     "Custom Flow Workflow Builder"
 ]
 
-SYSTEM_PROMPT = """You are a lead qualification expert for LooksCorner — a digital agency.
+SYSTEM_PROMPT = """You are a lead qualification expert for LooksCorner — a digital agency based in Pakistan.
 
-Our agency offers these services:
+Our agency offers:
 - AI Automation & Complex Workflows
 - Chatbot Development (WhatsApp, Web, Caller Bots)
 - Social Media Marketing, Auto Posting & Scheduling
@@ -31,37 +31,47 @@ Our agency offers these services:
 - N8N / Make.com Workflow Building
 - Personalized AI Agents
 
-Your job is to review a LinkedIn job posting and decide if the company posting this job could be a potential client for our agency.
+Your job is to:
+1. Decide if this job posting is RELEVANT for our agency
+2. Classify the company size as client type
 
 RELEVANT if:
-- Company is hiring for AI, automation, chatbot, social media, web dev, lead gen roles — they need these services
-- Company is hiring developers — they might need our web/automation services instead of full-time hire
-- Any tech-related hiring that suggests they need digital services
+- Company needs AI, automation, chatbot, social media, web dev, lead gen services
+- Company is hiring developers — they might need our services instead
+- Any tech-related role that suggests they need digital services
 
 NOT RELEVANT if:
-- Pure non-tech roles: Data Entry, Accountant, HR Manager, Sales Intern, Driver, Teacher, etc.
-- No connection to digital services whatsoever
+- Pure non-tech roles: Data Entry, Accountant, HR, Driver, Teacher, Cook etc.
+
+CLIENT TYPE:
+- "Main Client" → small business, startup, freelancer, solopreneur, individual
+- "GoodClient" → mid level company, growing business
+- "Oppertunity" → big corporation, enterprise, large company
 
 Examples:
-Job: "AI Automation Specialist needed"
+Job: "AI Automation Specialist" at small startup
 relevant: yes
+client_type: Main Client
 
-Job: "WhatsApp chatbot developer for e-commerce"
+Job: "WhatsApp chatbot developer" at e-commerce store
 relevant: yes
+client_type: Main Client
 
-Job: "React.js Developer for SaaS product"
+Job: "React Developer" at mid-size SaaS company
 relevant: yes
+client_type: GoodClient
 
-Job: "Data Entry Operator - typing speed required"
+Job: "Senior ML Engineer" at Google
+relevant: yes
+client_type: Oppertunity
+
+Job: "Data Entry Operator"
 relevant: no
+client_type: none
 
-Job: "Sales Intern for FMCG company"
-relevant: no
-
-Reply ONLY in this exact format — nothing else:
+Reply ONLY in this exact format:
 relevant: yes
-OR
-relevant: no"""
+client_type: Main Client"""
 
 def load_seen():
     if os.path.exists(SEEN_FILE):
@@ -93,7 +103,7 @@ def search_jobs(query, s):
         url += "?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollectionLite-88"
         url += "&count=5&q=jobSearch"
         url += f"&query=(origin:JOBS_HOME_SEARCH_BUTTON,keywords:{kw},locationUnion:(geoId:92000000),spellCorrectionEnabled:true)"
-        url += "&servedEventEnabled=false&start=0&f_TPR=r259200"
+        url += "&servedEventEnabled=false&start=0&f_TPR=r86400"
         res  = s.get(url)
         print(f"Search '{query}': {res.status_code}")
         data = res.json()
@@ -126,6 +136,7 @@ def get_job_data(job_id, s):
         if res.status_code != 200:
             print(f"Job {job_id}: {res.status_code}")
             return None
+
         raw  = res.json()
         data = raw.get("data", {})
         title = data.get("title", "")
@@ -133,15 +144,16 @@ def get_job_data(job_id, s):
         if not title:
             return None
 
-        # Job time
-        date = data.get("listedAt", "")
-        if date:
-            posted = datetime.fromtimestamp(int(date) / 1000)
+        # 24 hours filter
+        listed_at = data.get("listedAt", "")
+        job_time  = ""
+        if listed_at:
+            posted = datetime.fromtimestamp(int(listed_at) / 1000)
             diff   = datetime.now() - posted
-            if diff.days > 3:
-                print(f"Too old ({diff.days} days) — skip!")
+            if diff > timedelta(hours=24):
+                print(f"Too old ({diff}) — skip!")
                 return None
-            date = posted.strftime("%Y-%m-%d %H:%M")
+            job_time = posted.strftime("%H:%M")
 
         # Apply URL
         apply    = data.get("applyMethod", {})
@@ -155,27 +167,28 @@ def get_job_data(job_id, s):
         if remote and "remote" not in location.lower():
             location = f"Remote ({location})" if location else "Remote"
 
-        # Job Condition
+        # Job Condition — clean text
         job_condition = ""
-        employment_type = data.get("employmentStatus", "")
-        if employment_type:
+        emp = data.get("employmentStatus", "")
+        if emp:
+            last = emp.split(":")[-1]
             type_map = {
-                "FULL_TIME":   "Full Time",
-                "PART_TIME":   "Part Time",
-                "CONTRACT":    "Contract",
-                "TEMPORARY":   "Temporary",
-                "INTERNSHIP":  "Internship",
-                "VOLUNTEER":   "Volunteer",
-                "OTHER":       "Other"
+                "FULL_TIME":  "Full Time",
+                "PART_TIME":  "Part Time",
+                "CONTRACT":   "Contract",
+                "TEMPORARY":  "Temporary",
+                "INTERNSHIP": "Internship",
+                "VOLUNTEER":  "Volunteer",
+                "OTHER":      "Other"
             }
-            job_condition = type_map.get(employment_type, employment_type)
+            job_condition = type_map.get(last, last)
 
         return {
             "title":         title,
-            "description":   data.get("description", {}).get("text", "")[:300],
+            "description":   data.get("description", {}).get("text", "")[:400],
             "location":      location,
             "job_condition": job_condition,
-            "post_date":     date,
+            "job_time":      job_time,
             "profile_url":   data.get("jobPostingUrl", f"https://www.linkedin.com/jobs/view/{job_id}/"),
             "apply_url":     external if external else easy
         }
@@ -183,12 +196,12 @@ def get_job_data(job_id, s):
         print(f"Job data error: {e}")
         return None
 
-def is_relevant(title, description):
+def qualify_job(title, description):
     try:
-        user_prompt = f"Job Title: {title}\nJob Description: {description[:300]}"
+        user_prompt = "Job Title: " + title + "\nJob Description: " + description[:300]
         res = requests.post(
             "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {OPENAI_KEY}"},
+            headers={"Authorization": "Bearer " + OPENAI_KEY},
             json={
                 "model": "gpt-4o-mini",
                 "messages": [
@@ -196,15 +209,23 @@ def is_relevant(title, description):
                     {"role": "user",   "content": user_prompt}
                 ],
                 "temperature": 0.2,
-                "max_tokens":  10
+                "max_tokens":  20
             }
         )
         answer = res.json()["choices"][0]["message"]["content"].strip().lower()
         print(f"AI '{title[:35]}': {answer}")
-        return "relevant: yes" in answer
+        relevant    = "relevant: yes" in answer
+        client_type = ""
+        if "main client" in answer:
+            client_type = "Main Client"
+        elif "goodclient" in answer or "good client" in answer:
+            client_type = "GoodClient"
+        elif "oppertunity" in answer or "opportunity" in answer:
+            client_type = "Oppertunity"
+        return relevant, client_type
     except Exception as e:
         print(f"LLM error: {e}")
-        return True
+        return True, ""
 
 def save_to_sheet(row):
     try:
@@ -231,7 +252,8 @@ for query in QUERIES:
         if not data:
             continue
 
-        if not is_relevant(data.get("title", ""), data.get("description", "")):
+        relevant, client_type = qualify_job(data.get("title", ""), data.get("description", ""))
+        if not relevant:
             print(f"Not relevant — skip!")
             continue
 
@@ -241,15 +263,15 @@ for query in QUERIES:
             "description":   data.get("description", ""),
             "location":      data.get("location", ""),
             "job_condition": data.get("job_condition", ""),
-            "lead_status":   "Pending Outreach",
+            "lead_status":   "In Pending",
             "lead_type":     "",
-            "posture_score": "",
-            "job_time":      data.get("post_date", ""),
+            "client_type":   client_type,
+            "job_time":      data.get("job_time", ""),
             "profile_url":   data.get("profile_url", url),
             "apply_url":     data.get("apply_url", "")
         })
         seen.add(url)
-        print(f"Saved '{data.get('title')}'!")
+        print(f"Saved '{data.get('title')}'! Client: {client_type}")
         time.sleep(random.uniform(1, 3))
 
 save_seen(seen)
