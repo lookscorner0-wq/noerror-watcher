@@ -19,6 +19,50 @@ QUERIES = [
     "Custom Flow Workflow Builder"
 ]
 
+SYSTEM_PROMPT = """You are a lead qualification expert for LooksCorner — a digital agency.
+
+Our agency offers these services:
+- AI Automation & Complex Workflows
+- Chatbot Development (WhatsApp, Web, Caller Bots)
+- Social Media Marketing, Auto Posting & Scheduling
+- Lead Generation & Lead Booking Bots
+- Web Designing & Web Development
+- Email & WhatsApp Automation
+- N8N / Make.com Workflow Building
+- Personalized AI Agents
+
+Your job is to review a LinkedIn job posting and decide if the company posting this job could be a potential client for our agency.
+
+RELEVANT if:
+- Company is hiring for AI, automation, chatbot, social media, web dev, lead gen roles — they need these services
+- Company is hiring developers — they might need our web/automation services instead of full-time hire
+- Any tech-related hiring that suggests they need digital services
+
+NOT RELEVANT if:
+- Pure non-tech roles: Data Entry, Accountant, HR Manager, Sales Intern, Driver, Teacher, etc.
+- No connection to digital services whatsoever
+
+Examples:
+Job: "AI Automation Specialist needed"
+relevant: yes
+
+Job: "WhatsApp chatbot developer for e-commerce"
+relevant: yes
+
+Job: "React.js Developer for SaaS product"
+relevant: yes
+
+Job: "Data Entry Operator - typing speed required"
+relevant: no
+
+Job: "Sales Intern for FMCG company"
+relevant: no
+
+Reply ONLY in this exact format — nothing else:
+relevant: yes
+OR
+relevant: no"""
+
 def load_seen():
     if os.path.exists(SEEN_FILE):
         with open(SEEN_FILE) as f:
@@ -38,7 +82,6 @@ def get_session():
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
         "x-li-lang": "en_US",
         "x-restli-protocol-version": "2.0.0",
-        "x-li-deco-include-micro-schema": "true",
         "cookie": f'JSESSIONID="{LI_JSESSIONID}"; li_at={LI_AT}'
     })
     return s
@@ -51,11 +94,11 @@ def search_jobs(query, s):
         url += "&count=5&q=jobSearch"
         url += f"&query=(origin:JOBS_HOME_SEARCH_BUTTON,keywords:{kw},locationUnion:(geoId:92000000),spellCorrectionEnabled:true)"
         url += "&servedEventEnabled=false&start=0&f_TPR=r259200"
-        res   = s.get(url)
+        res  = s.get(url)
         print(f"Search '{query}': {res.status_code}")
-        data  = res.json()
+        data = res.json()
         cards = data.get("data", {}).get("metadata", {}).get("jobCardPrefetchQueries", [])
-        ids   = []
+        ids  = []
         for card in cards:
             for key in card.get("prefetchJobPostingCard", {}).keys():
                 match = re.search(r'\((\d+),', key)
@@ -83,12 +126,14 @@ def get_job_data(job_id, s):
         if res.status_code != 200:
             print(f"Job {job_id}: {res.status_code}")
             return None
-        raw   = res.json()
-        data  = raw.get("data", {})
+        raw  = res.json()
+        data = raw.get("data", {})
         title = data.get("title", "")
         print(f"Job {job_id} | Title: {title}")
         if not title:
             return None
+
+        # Job time
         date = data.get("listedAt", "")
         if date:
             posted = datetime.fromtimestamp(int(date) / 1000)
@@ -97,58 +142,78 @@ def get_job_data(job_id, s):
                 print(f"Too old ({diff.days} days) — skip!")
                 return None
             date = posted.strftime("%Y-%m-%d %H:%M")
+
+        # Apply URL
         apply    = data.get("applyMethod", {})
         atype    = apply.get("$type", "")
         external = apply.get("companyApplyUrl", "") if "OffsiteApply" in atype else ""
         easy     = apply.get("easyApplyUrl", "") if "ComplexOnsiteApply" in atype else ""
+
+        # Location
         location = data.get("formattedLocation", "")
         remote   = data.get("workRemoteAllowed", False)
         if remote and "remote" not in location.lower():
             location = f"Remote ({location})" if location else "Remote"
+
+        # Job Condition
+        job_condition = ""
+        employment_type = data.get("employmentStatus", "")
+        if employment_type:
+            type_map = {
+                "FULL_TIME":   "Full Time",
+                "PART_TIME":   "Part Time",
+                "CONTRACT":    "Contract",
+                "TEMPORARY":   "Temporary",
+                "INTERNSHIP":  "Internship",
+                "VOLUNTEER":   "Volunteer",
+                "OTHER":       "Other"
+            }
+            job_condition = type_map.get(employment_type, employment_type)
+
         return {
-            "title":       title,
-            "description": data.get("description", {}).get("text", "")[:300],
-            "location":    location,
-            "post_date":   date,
-            "profile_url": data.get("jobPostingUrl", f"https://www.linkedin.com/jobs/view/{job_id}/"),
-            "website_url": external if external else easy
+            "title":         title,
+            "description":   data.get("description", {}).get("text", "")[:300],
+            "location":      location,
+            "job_condition": job_condition,
+            "post_date":     date,
+            "profile_url":   data.get("jobPostingUrl", f"https://www.linkedin.com/jobs/view/{job_id}/"),
+            "apply_url":     external if external else easy
         }
     except Exception as e:
         print(f"Job data error: {e}")
         return None
 
-def is_relevant(title, description, query):
+def is_relevant(title, description):
     try:
-        prompt = f"""You are a lead qualification and research expert.
-Your role is to work for our team as a lead generation manager.
-Your job is to review job postings and identify high quality leads for our team
-that is looking for AI automation, chatbot development, social media marketing, and workflow building services.
-
-Review this job posting and reply ONLY in this format:
-score: 7
-relevant: yes
-
-Job Title: {title}
-Description: {description[:200]}
-We are looking for: {query}
-
-Score 1-10 based on how good this lead is for our team.
-relevant: yes or no only."""
-        res    = requests.post(
+        user_prompt = f"Job Title: {title}\nJob Description: {description[:300]}"
+        res = requests.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {OPENAI_KEY}"},
-            json={"model": "gpt-4o-mini", "messages": [{"role": "user", "content": prompt}]}
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user",   "content": user_prompt}
+                ],
+                "temperature": 0.2,
+                "max_tokens":  10
+            }
         )
         answer = res.json()["choices"][0]["message"]["content"].strip().lower()
-        print(f"AI '{title[:30]}': {answer}")
+        print(f"AI '{title[:35]}': {answer}")
         return "relevant: yes" in answer
-    except:
+    except Exception as e:
+        print(f"LLM error: {e}")
         return True
 
 def save_to_sheet(row):
-    res = requests.post(SHEET_URL, json=row)
-    print(f"Sheet: {res.text}")
+    try:
+        res = requests.post(SHEET_URL, json=row)
+        print(f"Sheet: {res.text}")
+    except Exception as e:
+        print(f"Sheet error: {e}")
 
+# Main
 seen = load_seen()
 s    = get_session()
 
@@ -156,7 +221,7 @@ for query in QUERIES:
     time.sleep(random.uniform(3, 6))
     job_ids = search_jobs(query, s)
 
-    for rank, job_id in enumerate(job_ids, 1):
+    for job_id in job_ids:
         url = f"https://www.linkedin.com/jobs/view/{job_id}/"
         if url in seen:
             print(f"Skip {job_id}!")
@@ -166,27 +231,25 @@ for query in QUERIES:
         if not data:
             continue
 
-        if not is_relevant(data.get("title", ""), data.get("description", ""), query):
+        if not is_relevant(data.get("title", ""), data.get("description", "")):
             print(f"Not relevant — skip!")
             continue
 
-        lead_score = max(10, 100 - rank)
         save_to_sheet({
             "timestamp":     time.strftime("%Y-%m-%d %H:%M"),
             "title":         data.get("title", ""),
             "description":   data.get("description", ""),
             "location":      data.get("location", ""),
-            "job_condition": "",
+            "job_condition": data.get("job_condition", ""),
             "lead_status":   "Pending Outreach",
             "lead_type":     "",
             "posture_score": "",
             "job_time":      data.get("post_date", ""),
             "profile_url":   data.get("profile_url", url),
-            "apply_url":     data.get("website_url", "")
+            "apply_url":     data.get("apply_url", "")
         })
-    
         seen.add(url)
-        print(f"Saved '{data.get('title')}'! Score: {lead_score}")
+        print(f"Saved '{data.get('title')}'!")
         time.sleep(random.uniform(1, 3))
 
 save_seen(seen)
