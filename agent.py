@@ -39,47 +39,18 @@ RELEVANT if:
 - Company needs workflow automation (N8N, Make.com, Zapier)
 - Any tech role suggesting they need digital/automation services
 
-NOT RELEVANT if:
-- Web designing or web development roles
-- Pure non-tech roles: Data Entry, Accountant, HR, Driver, Teacher etc.
+def get_client_type(description, location):
+    desc = description.lower()
+    # Big company keywords
+    if any(x in desc for x in ["enterprise", "fortune", "global leader", "10,000+", "publicly traded"]):
+        return "Oppertunity"
+    # Mid level
+    if any(x in desc for x in ["startup", "growing", "series a", "series b", "saas", "scale"]):
+        return "GoodClient"
+    # Default
+    return "Main Client"
 
-CLIENT TYPE:
-- "Main Client" → small business, startup, freelancer, individual
-- "GoodClient" → mid level company, growing business
-- "Oppertunity" → big corporation, enterprise, large company
-
-Examples:
-Job: "AI Automation Specialist needed"
-relevant: yes
-client_type: Main Client
-
-Job: "WhatsApp chatbot developer for e-commerce"
-relevant: yes
-client_type: Main Client
-
-Job: "N8N workflow builder for SaaS"
-relevant: yes
-client_type: GoodClient
-
-Job: "Social Media Manager at growing startup"
-relevant: yes
-client_type: GoodClient
-
-Job: "Senior ML Engineer at Google"
-relevant: yes
-client_type: Oppertunity
-
-Job: "React Developer / Web Designer"
-relevant: no
-client_type: none
-
-Job: "Data Entry Operator"
-relevant: no
-client_type: none
-
-Reply ONLY in this exact format:
-relevant: yes
-client_type: Main Client"""
+relevant: yes/no
 
 def load_seen():
     if os.path.exists(SEEN_FILE):
@@ -193,7 +164,7 @@ def get_job_data(job_id, s):
 
         return {
             "title":         title,
-            "description": " ".join(data.get("description", {}).get("text", "")[:400].split()),
+            "description":   data.get("description", {}).get("text", "")[:300],
             "location":      location,
             "job_condition": job_condition,
             "job_time":      job_time,
