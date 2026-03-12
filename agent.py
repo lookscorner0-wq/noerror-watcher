@@ -14,43 +14,22 @@ SEEN_FILE     = "seen_urls.json"
 
 QUERIES = [
     "AI Automation Expert",
-    "Need Custom Automation",
-    "Need Chatbot Developer",
-    "Lead Generation Expert"
+    "Social Media Marketing Manager",
+    "Chatbot Developer",
+    "Custom Flow Workflow Builder"
 ]
 
-SYSTEM_PROMPT = """You are a lead qualification expert for LooksCorner — a digital agency based in Pakistan.
-
-Our agency offers:
-- AI Automation & Complex Custom Workflows
-- Chatbot Development (WhatsApp, Web, Caller Bots)
-- Social Media Marketing, Auto Posting & Scheduling
-- Lead Generation & Lead Booking Bots
-- Email & WhatsApp Automation
-- N8N / Make.com Workflow Building
-- Personalized AI Agents
-
-Your job is to:
-1. Decide if this job posting is RELEVANT for our agency
-2. Classify the company size as client type
-
-RELEVANT if:
-- Company needs AI, automation, chatbot, social media, lead gen services
-- Company needs workflow automation (N8N, Make.com, Zapier)
-- Any tech role suggesting they need digital/automation services
-
-def get_client_type(description, location):
-    desc = description.lower()
-    # Big company keywords
-    if any(x in desc for x in ["enterprise", "fortune", "global leader", "10,000+", "publicly traded"]):
-        return "Oppertunity"
-    # Mid level
-    if any(x in desc for x in ["startup", "growing", "series a", "series b", "saas", "scale"]):
-        return "GoodClient"
-    # Default
-    return "Main Client"
-
-relevant: yes/no
+SYSTEM_PROMPT = (
+    "You are a lead qualification expert for LooksCorner, a digital agency in Pakistan. "
+    "We offer: AI Automation, Chatbot Development, Social Media Marketing, Workflow Building (N8N/Make), Lead Generation Bots. "
+    "Decide if this job posting is RELEVANT for our agency to reach out as a SERVICE PROVIDER. "
+    "RELEVANT: company needs AI, automation, chatbot, social media management, workflow services. "
+    "NOT RELEVANT: pure employee hiring (data entry, HR, driver, teacher), web design/development only. "
+    "Reply ONLY in this exact format:\n"
+    "relevant: yes\n"
+    "OR\n"
+    "relevant: no"
+)
 
 def load_seen():
     if os.path.exists(SEEN_FILE):
@@ -62,6 +41,14 @@ def save_seen(seen):
     with open(SEEN_FILE, "w") as f:
         json.dump(list(seen), f)
 
+def get_client_type(description):
+    desc = description.lower()
+    if any(x in desc for x in ["enterprise", "fortune", "global leader", "publicly traded", "10,000", "multinational"]):
+        return "Oppertunity"
+    if any(x in desc for x in ["startup", "growing", "series a", "series b", "saas", "scale up", "mid-size"]):
+        return "GoodClient"
+    return "Main Client"
+
 def get_session():
     s = requests.Session()
     s.headers.update({
@@ -71,6 +58,7 @@ def get_session():
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
         "x-li-lang": "en_US",
         "x-restli-protocol-version": "2.0.0",
+        "x-li-deco-include-micro-schema": "true",
         "cookie": f'JSESSIONID="{LI_JSESSIONID}"; li_at={LI_AT}'
     })
     return s
@@ -82,7 +70,7 @@ def search_jobs(query, s):
         url += "?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollectionLite-88"
         url += "&count=5&q=jobSearch"
         url += f"&query=(origin:JOBS_HOME_SEARCH_BUTTON,keywords:{kw},locationUnion:(geoId:92000000),spellCorrectionEnabled:true)"
-        url += "&servedEventEnabled=false&start=0&f_TPR=r86400"
+        url += "&servedEventEnabled=false&start=0&f_TPR=r259200"
         res  = s.get(url)
         print(f"Search '{query}': {res.status_code}")
         data = res.json()
@@ -123,7 +111,6 @@ def get_job_data(job_id, s):
         if not title:
             return None
 
-        # 24 hours filter
         listed_at = data.get("listedAt", "")
         job_time  = ""
         if listed_at:
@@ -134,31 +121,24 @@ def get_job_data(job_id, s):
                 return None
             job_time = posted.strftime("%H:%M")
 
-        # Apply URL
         apply    = data.get("applyMethod", {})
         atype    = apply.get("$type", "")
         external = apply.get("companyApplyUrl", "") if "OffsiteApply" in atype else ""
         easy     = apply.get("easyApplyUrl", "") if "ComplexOnsiteApply" in atype else ""
 
-        # Location
         location = data.get("formattedLocation", "")
         remote   = data.get("workRemoteAllowed", False)
         if remote and "remote" not in location.lower():
             location = f"Remote ({location})" if location else "Remote"
 
-        # Job Condition — clean text
-        job_condition = ""
         emp = data.get("employmentStatus", "")
+        job_condition = ""
         if emp:
             last = emp.split(":")[-1]
             type_map = {
-                "FULL_TIME":  "Full Time",
-                "PART_TIME":  "Part Time",
-                "CONTRACT":   "Contract",
-                "TEMPORARY":  "Temporary",
-                "INTERNSHIP": "Internship",
-                "VOLUNTEER":  "Volunteer",
-                "OTHER":      "Other"
+                "FULL_TIME": "Full Time", "PART_TIME": "Part Time",
+                "CONTRACT": "Contract", "TEMPORARY": "Temporary",
+                "INTERNSHIP": "Internship", "VOLUNTEER": "Volunteer", "OTHER": "Other"
             }
             job_condition = type_map.get(last, last)
 
@@ -177,34 +157,26 @@ def get_job_data(job_id, s):
 
 def qualify_job(title, description):
     try:
-        user_prompt = "Job Title: " + title + "\nJob Description: " + description[:300]
+        user_prompt = f"Job Title: {title}\nJob Description: {description[:300]}"
         res = requests.post(
             "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": "Bearer " + OPENAI_KEY},
+            headers={"Authorization": f"Bearer {OPENAI_KEY}"},
             json={
                 "model": "gpt-4o-mini",
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user",   "content": user_prompt}
                 ],
-                "temperature": 0.2,
-                "max_tokens":  20
+                "temperature": 0.1,
+                "max_tokens":  10
             }
         )
         answer = res.json()["choices"][0]["message"]["content"].strip().lower()
         print(f"AI '{title[:35]}': {answer}")
-        relevant    = "relevant: yes" in answer
-        client_type = ""
-        if "main client" in answer:
-            client_type = "Main Client"
-        elif "goodclient" in answer or "good client" in answer:
-            client_type = "GoodClient"
-        elif "oppertunity" in answer or "opportunity" in answer:
-            client_type = "Oppertunity"
-        return relevant, client_type
+        return "relevant: yes" in answer
     except Exception as e:
         print(f"LLM error: {e}")
-        return True, ""
+        return True
 
 def save_to_sheet(row):
     try:
@@ -231,10 +203,12 @@ for query in QUERIES:
         if not data:
             continue
 
-        relevant, client_type = qualify_job(data.get("title", ""), data.get("description", ""))
+        relevant = qualify_job(data.get("title", ""), data.get("description", ""))
         if not relevant:
             print(f"Not relevant — skip!")
             continue
+
+        client_type = get_client_type(data.get("description", ""))
 
         save_to_sheet({
             "timestamp":     time.strftime("%Y-%m-%d %H:%M"),
