@@ -14,9 +14,9 @@ SEEN_FILE     = "seen_urls.json"
 
 QUERIES = [
     "AI Automation Expert",
-    "Social Media Marketing Manager",
-    "Chatbot Developer",
-    "Custom Flow Workflow Builder"
+    "Need Custom Automation",
+    "Need Chatbot Developer",
+    "Lead Generation Expert"
 ]
 
 SYSTEM_PROMPT = """You are a lead qualification expert for LooksCorner — a digital agency based in Pakistan.
