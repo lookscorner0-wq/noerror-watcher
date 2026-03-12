@@ -116,7 +116,7 @@ def get_job_data(job_id, s):
         if listed_at:
             posted = datetime.fromtimestamp(int(listed_at) / 1000)
             diff   = datetime.now() - posted
-            if diff > timedelta(hours=24):
+            if diff > timedelta(hours=72):
                 print(f"Too old ({diff}) — skip!")
                 return None
             job_time = posted.strftime("%H:%M")
