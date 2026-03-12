@@ -21,7 +21,7 @@ QUERIES = [
 
 SYSTEM_PROMPT = (
     "You are a lead qualification expert for LooksCorner, a digital agency in Pakistan. "
-    "We offer: AI Automation, Chatbot Development, Social Media Marketing, Workflow Building (N8N/Make), Lead Generation Bots. "
+    "We offer: AI Automation, Chatbot Development, Social Media Marketing, Workflow Building (N8N/Make), Lead Generation, Cold Email-Whatsapp Calling, Social Media Automation, personal Chatbots, leads Booking-Meetings Bots, Business Automating. "
     "Decide if this job posting is RELEVANT for our agency to reach out as a SERVICE PROVIDER. "
     "RELEVANT: company needs AI, automation, chatbot, social media management, workflow services. "
     "NOT RELEVANT: pure employee hiring (data entry, HR, driver, teacher), web design/development only. "
