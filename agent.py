@@ -5,6 +5,8 @@ import random
 import re
 import requests
 from datetime import datetime, timedelta
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
 
 LI_AT         = os.environ["LI_AT"]
 LI_JSESSIONID = os.environ["LI_JSESSIONID"]
@@ -150,7 +152,7 @@ def get_job_data(job_id, s):
             "job_condition": job_condition,
             "job_time":      job_time,
             "profile_url":   data.get("jobPostingUrl", f"https://www.linkedin.com/jobs/view/{job_id}/"),
-            "apply_url":     external if external else easy
+            "apply_url":     data.get("apply_url", external if external else easy)
         }
     except Exception as e:
         print(f"Job data error: {e}")
@@ -186,47 +188,72 @@ def save_to_sheet(row):
     except Exception as e:
         print(f"Sheet error: {e}")
 
-# Main
-seen = load_seen()
-s    = get_session()
+def run_watcher():
+    seen = load_seen()
+    s    = get_session()
 
-for query in QUERIES:
-    time.sleep(random.uniform(3, 6))
-    job_ids = search_jobs(query, s)
+    for query in QUERIES:
+        time.sleep(random.uniform(3, 6))
+        job_ids = search_jobs(query, s)
 
-    for job_id in job_ids:
-        url = f"https://www.linkedin.com/jobs/view/{job_id}/"
-        if url in seen:
-            print(f"Skip {job_id}!")
-            continue
+        for job_id in job_ids:
+            url = f"https://www.linkedin.com/jobs/view/{job_id}/"
+            if url in seen:
+                print(f"Skip {job_id}!")
+                continue
 
-        data = get_job_data(job_id, s)
-        if not data:
-            continue
+            data = get_job_data(job_id, s)
+            if not data:
+                continue
 
-        relevant = qualify_job(data.get("title", ""), data.get("description", ""))
-        if not relevant:
-            print(f"Not relevant — skip!")
-            continue
+            relevant = qualify_job(data.get("title", ""), data.get("description", ""))
+            if not relevant:
+                print(f"Not relevant — skip!")
+                continue
 
-        client_type = get_client_type(data.get("description", ""))
+            client_type = get_client_type(data.get("description", ""))
 
-        save_to_sheet({
-            "timestamp":     time.strftime("%Y-%m-%d %H:%M"),
-            "title":         data.get("title", ""),
-            "description":   data.get("description", ""),
-            "location":      data.get("location", ""),
-            "job_condition": data.get("job_condition", ""),
-            "lead_status":   "In Pending",
-            "lead_type":     "",
-            "client_type":   client_type,
-            "job_time":      data.get("job_time", ""),
-            "profile_url":   data.get("profile_url", url),
-            "apply_url":     data.get("apply_url", "")
-        })
-        seen.add(url)
-        print(f"Saved '{data.get('title')}'! Client: {client_type}")
-        time.sleep(random.uniform(1, 3))
+            save_to_sheet({
+                "timestamp":     time.strftime("%Y-%m-%d %H:%M"),
+                "title":         data.get("title", ""),
+                "description":   data.get("description", ""),
+                "location":      data.get("location", ""),
+                "job_condition": data.get("job_condition", ""),
+                "lead_status":   "In Pending",
+                "lead_type":     "",
+                "client_type":   client_type,
+                "job_time":      data.get("job_time", ""),
+                "profile_url":   data.get("profile_url", url),
+                "apply_url":     data.get("apply_url", "")
+            })
+            seen.add(url)
+            print(f"Saved '{data.get('title')}'! Client: {client_type}")
+            time.sleep(random.uniform(1, 3))
 
-save_seen(seen)
-print("Done!")
+    save_seen(seen)
+    print("Done!")
+
+# =============================
+# Keep alive for Leapcell
+# =============================
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'OK')
+    def log_message(self, format, *args):
+        pass
+
+def run_server():
+    server = HTTPServer(('0.0.0.0', 8080), Handler)
+    server.serve_forever()
+
+# Server alag thread mein start karo
+threading.Thread(target=run_server, daemon=True).start()
+
+# Watcher loop — har 1 ghante mein run karo
+while True:
+    print(f"\n--- Watcher Run: {datetime.now().strftime('%Y-%m-%d %H:%M')} ---")
+    run_watcher()
+    print("Sleeping 1 hour...")
+    time.sleep(3600)
