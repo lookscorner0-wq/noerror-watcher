@@ -34,6 +34,24 @@ SYSTEM_PROMPT = (
     "relevant: no"
 )
 
+# =============================
+# Keep alive — PEHLE START KARO
+# =============================
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'OK')
+    def log_message(self, format, *args):
+        pass
+
+server = HTTPServer(('0.0.0.0', 8080), Handler)
+threading.Thread(target=server.serve_forever, daemon=True).start()
+print("Server started on port 8080!")
+
+# =============================
+# Watcher Functions
+# =============================
 def load_seen():
     if os.path.exists(SEEN_FILE):
         with open(SEEN_FILE) as f:
@@ -152,7 +170,7 @@ def get_job_data(job_id, s):
             "job_condition": job_condition,
             "job_time":      job_time,
             "profile_url":   data.get("jobPostingUrl", f"https://www.linkedin.com/jobs/view/{job_id}/"),
-            "apply_url":     data.get("apply_url", external if external else easy)
+            "apply_url":     external if external else easy
         }
     except Exception as e:
         print(f"Job data error: {e}")
@@ -234,24 +252,8 @@ def run_watcher():
     print("Done!")
 
 # =============================
-# Keep alive for Leapcell
+# Main Loop
 # =============================
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b'OK')
-    def log_message(self, format, *args):
-        pass
-
-def run_server():
-    server = HTTPServer(('0.0.0.0', 8080), Handler)
-    server.serve_forever()
-
-# Server alag thread mein start karo
-threading.Thread(target=run_server, daemon=True).start()
-
-# Watcher loop — har 1 ghante mein run karo
 while True:
     print(f"\n--- Watcher Run: {datetime.now().strftime('%Y-%m-%d %H:%M')} ---")
     run_watcher()
